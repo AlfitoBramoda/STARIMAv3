@@ -127,19 +127,19 @@ create_stacf_heatmap <- function(stacf_result, title, filename) {
       theme_minimal() +
       theme(plot.title = element_text(hjust = 0.5))
     
-    # Save plot
-    ggsave(filename, p, width = 8, height = 6, dpi = 300)
+    # # Save plot
+    # ggsave(filename, p, width = 8, height = 6, dpi = 300)
     
-    # Also display the plot
-    print(p)
+    # # Also display the plot
+    # print(p)
     
-    cat("✅", title, "STACF heatmap saved:", filename, "\n")
+    # cat("✅", title, "STACF heatmap saved:", filename, "\n")
     
-    return(TRUE)
+    # return(TRUE)
     
   }, error = function(e) {
-    cat("❌ Error creating", title, "plot:", e$message, "\n")
-    return(FALSE)
+    # cat("❌ Error creating", title, "plot:", e$message, "\n")
+    # return(FALSE)
   })
 }
 
@@ -261,11 +261,11 @@ if (!is.null(acf_plot1) && !is.null(acf_plot2) && !is.null(acf_plot3)) {
     scale_x_continuous(breaks = 1:max(combined_acf_data$Lag)) +
     scale_color_manual(values = c("Uniform" = "blue", "Distance" = "red", "Correlation" = "green"))
   
-  # Save and display combined plot
-  ggsave("plots/07_stacf_combined_acf.png", p_combined, width = 40, height = 8, dpi = 300)
-  print(p_combined)
+  # # Save and display combined plot
+  # ggsave("plots/07_stacf_combined_acf.png", p_combined, width = 40, height = 8, dpi = 300)
+  # print(p_combined)
   
-  cat("✅ Combined ACF comparison plot saved: plots/07_stacf_combined_acf.png\n")
+  # cat("✅ Combined ACF comparison plot saved: plots/07_stacf_combined_acf.png\n")
 }
 
 # ============================================================================
@@ -398,11 +398,11 @@ stacf_summary <- data.frame(
     ifelse(!is.null(distance_ma), paste("MA(", distance_ma$suggested_q, ")", sep=""), "N/A"),
     ifelse(!is.null(correlation_ma), paste("MA(", correlation_ma$suggested_q, ")", sep=""), "N/A")
   ),
-  Plot_Generated = c(
-    ifelse(!is.null(plot1) && plot1, "✅ Yes", "❌ No"),
-    ifelse(!is.null(plot2) && plot2, "✅ Yes", "❌ No"),
-    ifelse(!is.null(plot3) && plot3, "✅ Yes", "❌ No")
-  ),
+  # Plot_Generated = c(
+  #   ifelse(!is.null(plot1) && plot1, "✅ Yes", "❌ No"),
+  #   ifelse(!is.null(plot2) && plot2, "✅ Yes", "❌ No"),
+  #   ifelse(!is.null(plot3) && plot3, "✅ Yes", "❌ No")
+  # ),
   stringsAsFactors = FALSE
 )
 

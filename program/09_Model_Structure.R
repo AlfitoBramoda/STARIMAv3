@@ -128,7 +128,7 @@ cat("- Total AR parameters:", sum(ar_mask), "\n")
 cat("\nAR Mask Matrix:\n")
 rownames(ar_mask) <- paste("Spatial_Lag", 0:max_spatial_lag)
 colnames(ar_mask) <- paste("Temporal_Lag", 1:p_order)
-print(ar_mask)
+# print(ar_mask)
 
 # ============================================================================
 # MA MASK MATRIX CREATION
@@ -171,7 +171,7 @@ cat("- Total MA parameters:", sum(ma_mask), "\n")
 cat("\nMA Mask Matrix:\n")
 rownames(ma_mask) <- paste("Spatial_Lag", 0:max_spatial_lag)
 colnames(ma_mask) <- paste("Temporal_Lag", 1:q_order)
-print(ma_mask)
+# print(ma_mask)
 
 # ============================================================================
 # PARAMETER STRUCTURE ANALYSIS
@@ -294,11 +294,11 @@ create_mask_plot <- function(mask_matrix, title, filename) {
                        color = "white", size = 4, fontface = "bold")
   }
   
-  # Save and display
-  ggsave(filename, p, width = 8, height = 6, dpi = 300)
-  print(p)
+  # # Save and display
+  # ggsave(filename, p, width = 8, height = 6, dpi = 300)
+  # print(p)
   
-  cat("✅", title, "structure plot saved:", filename, "\n")
+  # cat("✅", title, "structure plot saved:", filename, "\n")
   
   return(p)
 }
@@ -309,12 +309,12 @@ ar_plot <- create_mask_plot(ar_mask, "AR Mask Matrix", "plots/09_ar_mask_structu
 # Create MA mask plot
 ma_plot <- create_mask_plot(ma_mask, "MA Mask Matrix", "plots/09_ma_mask_structure.png")
 
-# Create combined plot
-combined_plot <- grid.arrange(ar_plot, ma_plot, ncol = 2,
-                              top = paste("STARIMA(", p_order, ",", d_order, ",", q_order, ") Model Structure"))
+# # Create combined plot
+# combined_plot <- grid.arrange(ar_plot, ma_plot, ncol = 2,
+#                               top = paste("STARIMA(", p_order, ",", d_order, ",", q_order, ") Model Structure"))
 
-ggsave("plots/09_combined_mask_structure.png", combined_plot, width = 14, height = 6, dpi = 300)
-cat("✅ Combined model structure plot saved: plots/09_combined_mask_structure.png\n")
+# ggsave("plots/09_combined_mask_structure.png", combined_plot, width = 14, height = 6, dpi = 300)
+# cat("✅ Combined model structure plot saved: plots/09_combined_mask_structure.png\n")
 
 # ============================================================================
 # MODEL SPECIFICATION SUMMARY
@@ -373,7 +373,7 @@ summary_table <- data.frame(
   stringsAsFactors = FALSE
 )
 
-print(summary_table)
+# print(summary_table)
 
 # ============================================================================
 # SAVE RESULTS

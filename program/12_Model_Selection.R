@@ -322,17 +322,17 @@ insensitivity_plot <- ggplot(insensitivity_metrics, aes(x = Metric, y = Value, f
   scale_fill_manual(values = c("✅ EXCELLENT" = "darkgreen", "✅ GOOD" = "orange", "❌ SIGNIFICANT" = "red", "❌ POOR" = "darkred"))
 
 # Save plots
-ggsave("plots/12_model_fit_comparison.png", fit_plot, width = 12, height = 8, dpi = 300)
-ggsave("plots/12_parameter_consistency.png", param_plot, width = 12, height = 8, dpi = 300)
-ggsave("plots/12_insensitivity_validation.png", insensitivity_plot, width = 10, height = 6, dpi = 300)
+# ggsave("plots/12_model_fit_comparison.png", fit_plot, width = 12, height = 8, dpi = 300)
+# ggsave("plots/12_parameter_consistency.png", param_plot, width = 12, height = 8, dpi = 300)
+# ggsave("plots/12_insensitivity_validation.png", insensitivity_plot, width = 10, height = 6, dpi = 300)
 
-print(fit_plot)
-print(param_plot)
-print(insensitivity_plot)
+# print(fit_plot)
+# print(param_plot)
+# print(insensitivity_plot)
 
-cat("✅ Model fit comparison saved: plots/12_model_fit_comparison.png\n")
-cat("✅ Parameter consistency saved: plots/12_parameter_consistency.png\n")
-cat("✅ Insensitivity validation saved: plots/12_insensitivity_validation.png\n")
+# cat("✅ Model fit comparison saved: plots/12_model_fit_comparison.png\n")
+# cat("✅ Parameter consistency saved: plots/12_parameter_consistency.png\n")
+# cat("✅ Insensitivity validation saved: plots/12_insensitivity_validation.png\n")
 
 # ============================================================================
 # SAVE RESULTS

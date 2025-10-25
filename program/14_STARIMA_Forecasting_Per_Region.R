@@ -268,6 +268,7 @@ for (r in colnames(test_data)) {
           legend.position = "bottom")
   
   ggsave(paste0("plots/14_forecast_", r, ".png"), p, width = 10, height = 6, dpi = 300)
+  print(p)
 }
 
 # ----------------------------------------------------------------------------
@@ -282,8 +283,8 @@ p_rmse <- ggplot(region_eval, aes(x = Region, y = RMSE, fill = Region)) +
   theme_minimal() +
   theme(legend.position = "none",
         plot.title = element_text(hjust = .5))
-ggsave("plots/14_starima_forecast_rmse.png", p_rmse, width = 8, height = 5, dpi = 300)
-print(p_rmse)
+# ggsave("plots/14_starima_forecast_rmse.png", p_rmse, width = 8, height = 5, dpi = 300)
+# print(p_rmse)
 
 # ----------------------------------------------------------------------------
 # 8) Save Results

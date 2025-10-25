@@ -219,8 +219,8 @@ coef_plot <- ggplot(coef_table, aes(x = Parameter, y = Estimate)) +
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 
-ggsave("plots/10c_correlation_coefficients.png", coef_plot, width = 10, height = 6, dpi = 300)
-print(coef_plot)
+# ggsave("plots/10c_correlation_coefficients.png", coef_plot, width = 10, height = 6, dpi = 300)
+# print(coef_plot)
 
 # 2. Residual time series plot
 residual_ts <- data.frame(
@@ -260,7 +260,7 @@ residual_hist <- ggplot(residual_ts, aes(x = Residuals)) +
 ggsave("plots/10c_correlation_residual_dist.png", residual_hist, width = 8, height = 6, dpi = 300)
 print(residual_hist)
 
-cat("✅ Coefficient plot saved: plots/10c_correlation_coefficients.png\n")
+# cat("✅ Coefficient plot saved: plots/10c_correlation_coefficients.png\n")
 cat("✅ Residual plot saved: plots/10c_correlation_residuals.png\n")
 cat("✅ Residual distribution saved: plots/10c_correlation_residual_dist.png\n")
 

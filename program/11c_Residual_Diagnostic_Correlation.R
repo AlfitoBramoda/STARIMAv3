@@ -171,43 +171,53 @@ cat("- Jarque-Bera p-value:", round(jb_p_value, 4), "\n")
 
 cat("\n📊 Creating Diagnostic Plots...\n")
 
-# 1. Residual ACF plot
+# 1. Residual ACF plot (ACF-style like file 07)
 acf_data <- data.frame(
   Lag = 1:length(residual_acf$acf[-1]),
   ACF = residual_acf$acf[-1]
 )
 
+# Calculate confidence bounds
+n <- length(residuals_correlation)
+conf_bound <- 1.96 / sqrt(n)
+
 acf_plot <- ggplot(acf_data, aes(x = Lag, y = ACF)) +
-  geom_col(fill = "darkorange", alpha = 0.7) +
-  geom_hline(yintercept = c(-1.96/sqrt(length(residuals_correlation)), 
-                           1.96/sqrt(length(residuals_correlation))), 
-             linetype = "dashed", color = "red") +
-  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = 0, color = "black", size = 0.5) +
+  geom_hline(yintercept = c(conf_bound, -conf_bound), 
+             color = "blue", linetype = "dashed", size = 0.5) +
+  geom_segment(aes(xend = Lag, yend = 0), color = "darkorange", size = 1) +
+  geom_point(color = "darkorange", size = 2) +
   labs(title = "Residual ACF - Correlation Weights",
-       subtitle = "Dashed lines: 95% confidence bounds",
+       subtitle = paste("Residual autocorrelation analysis - n =", n),
        x = "Lag", y = "Autocorrelation") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
+        plot.subtitle = element_text(hjust = 0.5)) +
+  scale_x_continuous(breaks = 1:length(residual_acf$acf[-1])) +
+  ylim(c(min(-conf_bound * 1.2, min(acf_data$ACF) * 1.1), 
+         max(conf_bound * 1.2, max(acf_data$ACF) * 1.1)))
 
-# 2. Residual PACF plot
+# 2. Residual PACF plot (ACF-style like file 07)
 pacf_data <- data.frame(
   Lag = 1:length(residual_pacf$acf),
   PACF = residual_pacf$acf
 )
 
 pacf_plot <- ggplot(pacf_data, aes(x = Lag, y = PACF)) +
-  geom_col(fill = "darkorange", alpha = 0.7) +
-  geom_hline(yintercept = c(-1.96/sqrt(length(residuals_correlation)), 
-                           1.96/sqrt(length(residuals_correlation))), 
-             linetype = "dashed", color = "red") +
-  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = 0, color = "black", size = 0.5) +
+  geom_hline(yintercept = c(conf_bound, -conf_bound), 
+             color = "blue", linetype = "dashed", size = 0.5) +
+  geom_segment(aes(xend = Lag, yend = 0), color = "orange", size = 1) +
+  geom_point(color = "orange", size = 2) +
   labs(title = "Residual PACF - Correlation Weights",
-       subtitle = "Dashed lines: 95% confidence bounds",
+       subtitle = paste("Residual partial autocorrelation analysis - n =", n),
        x = "Lag", y = "Partial Autocorrelation") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
+        plot.subtitle = element_text(hjust = 0.5)) +
+  scale_x_continuous(breaks = 1:length(residual_pacf$acf)) +
+  ylim(c(min(-conf_bound * 1.2, min(pacf_data$PACF) * 1.1), 
+         max(conf_bound * 1.2, max(pacf_data$PACF) * 1.1)))
 
 # 3. Q-Q plot for normality
 qq_data <- data.frame(

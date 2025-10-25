@@ -199,7 +199,6 @@ create_weight_heatmap <- function(weights, title, filename) {
           plot.subtitle = element_text(hjust = 0.5)) +
     coord_fixed()
   
-  print(p)
   ggsave(filename, p, width = 8, height = 6, dpi = 300)
   return(p)
 }
