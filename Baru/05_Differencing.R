@@ -4,6 +4,11 @@
 
 cat("🔄 Seasonal Differencing (lag = 12) Started...\n")
 
+# Clear any existing dates_diff object to avoid conflicts
+if (exists("dates_diff")) {
+  rm(dates_diff)
+}
+
 # Load Box-Cox or previous data
 load("output/04_boxcox_data.RData")
 
@@ -37,26 +42,8 @@ for (i in 1:n_regions) {
 valid_rows <- complete.cases(differenced_matrix)
 differenced_matrix <- differenced_matrix[valid_rows, ]
 
-# Simpan tanggal yang sesuai (hapus 12 observasi awal)
-# Align dates with centered data (after differencing)
-if (exists("dates_diff")) {
-  plot_dates <- as.Date(dates_diff)
-  
-  # Safety check: ensure same length as differenced_matrix
-  if (length(plot_dates) != nrow(differenced_matrix)) {
-    diff_len <- length(plot_dates) - nrow(differenced_matrix)
-    if (diff_len > 0) {
-      plot_dates <- tail(plot_dates, nrow(differenced_matrix))
-      cat("⚙️ Trimmed first", diff_len, "dates to match centered data\n")
-    } else if (diff_len < 0) {
-      cat("⚠️ Fewer dates than data rows — verify differencing pipeline\n")
-    }
-  }
-  
-} else {
-  plot_dates <- seq(as.Date("2016-01-31"), by = "month", length.out = nrow(differenced_matrix))
-  cat("⚠️ 'dates_diff' not found, generated synthetic monthly sequence\n")
-}
+# Inisiasi plot_dates sesuai dengan data setelah differencing
+plot_dates <- seq(as.Date("2016-01-31"), by = "month", length.out = nrow(differenced_matrix))
 
 # Save results
 save(differenced_matrix, integration_order, plot_dates, regions,
