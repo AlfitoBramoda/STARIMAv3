@@ -245,41 +245,123 @@ cat("✅ Evaluation completed\n\n")
 print(region_eval)
 
 # ----------------------------------------------------------------------------
-# 7) Visualization: Forecast vs Actual per Region (Original Scale)
+# 7) Enhanced Visualization: Forecast vs Actual
 # ----------------------------------------------------------------------------
 if (!dir.exists("plots")) dir.create("plots")
 
-cat("\n📈 Generating forecast plots (original scale)...\n")
+cat("\n📈 Creating comprehensive forecast vs actual plots...\n")
+
+# Prepare data for plotting
+plot_data <- data.frame(
+  Time = rep(test_time, ncol(test_data)),
+  Region = rep(colnames(test_data), each = nrow(test_data)),
+  Actual = as.vector(test_final),
+  Forecast = as.vector(forecast_final)
+)
+
+# Combined plot for all regions
+p_combined <- ggplot(plot_data, aes(x = Time)) +
+  geom_line(aes(y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(y = Forecast, color = "Forecast"), size = 1, linetype = "dashed") +
+  geom_point(aes(y = Actual, color = "Actual"), size = 1.5, alpha = 0.7) +
+  geom_point(aes(y = Forecast, color = "Forecast"), size = 1.5, alpha = 0.7) +
+  facet_wrap(~Region, scales = "free_y", ncol = 2) +
+  scale_color_manual(values = c("Actual" = "#2E86AB", "Forecast" = "#F24236")) +
+  labs(title = "STARIMA Forecast vs Actual - All Regions",
+       subtitle = "Out-of-Sample Forecasting (2024)",
+       x = "Time Period", y = "Rainfall (mm)",
+       color = "Series") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, size = 12),
+        legend.position = "bottom",
+        strip.text = element_text(face = "bold"))
+
+ggsave("plots/16_forecast_vs_actual_combined.png", p_combined, 
+       width = 12, height = 8, dpi = 300)
+print(p_combined)
+
+# Individual plots per region with enhanced styling
 for (r in colnames(test_data)) {
   actual_vals <- as.numeric(test_final[, r])
   forecast_vals <- as.numeric(forecast_final[, r])
   
-  cat("Region", r, "- Actual:", round(range(actual_vals, na.rm=TRUE), 1), 
-      "Forecast:", round(range(forecast_vals, na.rm=TRUE), 1), "mm\n")
-  
-  df <- data.frame(
+  df_region <- data.frame(
     Time = test_time,
     Actual = actual_vals,
     Forecast = forecast_vals
   )
   
-  p <- ggplot(df, aes(x = Time)) +
-    geom_line(aes(y = Actual, color = "Actual"), size = 1.2) +
-    geom_line(aes(y = Forecast, color = "Forecast"), size = 1.2, linetype = "dashed") +
-    geom_point(aes(y = Actual, color = "Actual"), size = 2) +
-    geom_point(aes(y = Forecast, color = "Forecast"), size = 2) +
-    scale_color_manual(values = c("Actual" = "black", "Forecast" = "red")) +
-    labs(title = paste("Forecast vs Actual -", r),
-         subtitle = "STARIMA Out-of-Sample (2024) - Original Scale",
-         x = "Time", y = "Rainfall (mm)",
+  # Calculate correlation for subtitle
+  corr_val <- cor(actual_vals, forecast_vals, use = "complete.obs")
+  mae_val <- region_eval[region_eval$Region == r, "MAE"]
+  rmse_val <- region_eval[region_eval$Region == r, "RMSE"]
+  
+  p_individual <- ggplot(df_region, aes(x = Time)) +
+    geom_ribbon(aes(ymin = pmin(Actual, Forecast), ymax = pmax(Actual, Forecast)), 
+                alpha = 0.2, fill = "gray") +
+    geom_line(aes(y = Actual, color = "Actual"), size = 1.5) +
+    geom_line(aes(y = Forecast, color = "Forecast"), size = 1.5, linetype = "dashed") +
+    geom_point(aes(y = Actual, color = "Actual"), size = 3) +
+    geom_point(aes(y = Forecast, color = "Forecast"), size = 3, shape = 17) +
+    scale_color_manual(values = c("Actual" = "#2E86AB", "Forecast" = "#F24236")) +
+    labs(title = paste("Forecast vs Actual:", r),
+         subtitle = paste0("Correlation: ", round(corr_val, 3), 
+                          " | MAE: ", round(mae_val, 2), 
+                          " | RMSE: ", round(rmse_val, 2), " mm"),
+         x = "Time Period", y = "Rainfall (mm)",
          color = "Series") +
     theme_minimal() +
-    theme(plot.title = element_text(hjust = .5),
-          plot.subtitle = element_text(hjust = .5),
-          legend.position = "bottom")
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 11),
+          legend.position = "bottom",
+          panel.grid.minor = element_blank())
   
-  ggsave(paste0("plots/16_forecast_original_", r, ".png"), p, width = 10, height = 6, dpi = 300)
+  ggsave(paste0("plots/16_forecast_individual_", r, ".png"), p_individual, 
+         width = 10, height = 6, dpi = 300)
 }
+
+# Scatter plot: Forecast vs Actual
+p_scatter <- ggplot(plot_data, aes(x = Actual, y = Forecast, color = Region)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black", size = 1) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.3) +
+  labs(title = "Forecast vs Actual: Scatter Plot",
+       subtitle = "Perfect forecast would lie on the diagonal line",
+       x = "Actual Rainfall (mm)", y = "Forecasted Rainfall (mm)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, size = 11),
+        legend.position = "bottom")
+
+ggsave("plots/16_forecast_scatter.png", p_scatter, width = 10, height = 8, dpi = 300)
+print(p_scatter)
+
+# Additional error metrics visualization
+error_data <- data.frame(
+  Time = rep(test_time, ncol(test_data)),
+  Region = rep(colnames(test_data), each = nrow(test_data)),
+  Error = as.vector(test_final) - as.vector(forecast_final),
+  Abs_Error = abs(as.vector(test_final) - as.vector(forecast_final))
+)
+
+# Error distribution plot
+p_error <- ggplot(error_data, aes(x = Error, fill = Region)) +
+  geom_histogram(alpha = 0.7, bins = 20, position = "identity") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
+  facet_wrap(~Region, scales = "free") +
+  labs(title = "Forecast Error Distribution by Region",
+       subtitle = "Errors centered around zero indicate unbiased forecasts",
+       x = "Forecast Error (Actual - Forecast)", y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, size = 11),
+        legend.position = "none",
+        strip.text = element_text(face = "bold"))
+
+ggsave("plots/16_forecast_error_distribution.png", p_error, 
+       width = 12, height = 8, dpi = 300)
+print(p_error)
 
 # ----------------------------------------------------------------------------
 # 8) RMSE Bar Chart
