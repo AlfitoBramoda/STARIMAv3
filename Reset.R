@@ -18,7 +18,6 @@ if(!is.null(dev.list())) {
 }
 
 # 3. Set working directory
-setwd("C:\\Users\\hp\\Documents\\Baby\\STARIMAv3")
 cat("✅ Working directory:", getwd(), "\n")
 
 # 4. Remove output directories dan isinya
