@@ -176,6 +176,102 @@ for (t in 1:h) {
   }
 }
 
+# ----------------------------------------------------------------------------
+# 4.1️⃣ Inverse Transformations (Differencing + Centering)
+# ----------------------------------------------------------------------------
+cat("\n🔄 Performing inverse transformations (centering + differencing)...\n")
+
+# Load transformation parameters if available
+center_params_file <- "output/08_centered_data.RData"
+diff_params_file   <- "output/05_differencing_results.RData"
+
+# Initialize placeholders
+centering_params <- NULL
+integration_order <- NULL
+differenced_matrix <- NULL
+
+# --- Load centering parameters
+if (file.exists(center_params_file)) {
+  load(center_params_file)  # should contain centered_matrix, centering_params
+  if (exists("centering_params")) {
+    cat("✅ Centering parameters loaded.\n")
+  } else {
+    cat("⚠️ Centering params not found, skipping centering correction.\n")
+  }
+} else {
+  cat("⚠️ Centering file not found, skipping centering correction.\n")
+}
+
+# --- Load differencing parameters
+if (file.exists(diff_params_file)) {
+  load(diff_params_file)  # should contain integration_order or differenced_matrix
+  if (exists("integration_order")) {
+    cat("✅ Integration order loaded: d =", integration_order, "\n")
+  } else {
+    cat("⚠️ Integration order not found, assuming d = 1\n")
+    integration_order <- 1
+  }
+} else {
+  cat("⚠️ Differencing file not found, assuming d = 1\n")
+  integration_order <- 1
+}
+
+# ----------------------------------------------------------------------------
+# Inverse differencing
+# ----------------------------------------------------------------------------
+inverse_diff <- function(forecast_values, original_data, d = 1) {
+  # Normalize differencing order to single numeric value
+  if (length(d) > 1) {
+    d <- unique(d[!is.na(d)])  # ambil nilai unik non-NA
+    if (length(d) > 1) {
+      cat("⚠️ Multiple differencing orders detected, using first value:", d[1], "\n")
+      d <- d[1]
+    }
+  }
+  d <- as.numeric(d)
+  
+  restored <- forecast_values
+  if (!is.na(d) && d > 0) {
+    cat("🔁 Applying inverse differencing of order", d, "...\n")
+    for (col in 1:ncol(forecast_values)) {
+      last_value <- tail(original_data[, col], d)
+      restored[, col] <- diffinv(forecast_values[, col], differences = d, xi = last_value)[-(1:d)]
+    }
+  } else {
+    cat("⚙️ No differencing applied (d = 0 or NA)\n")
+  }
+  return(restored)
+}
+
+# Apply inverse differencing
+forecast_inverse_diff <- inverse_diff(forecast_matrix, Y, d = integration_order)
+cat("✅ Inverse differencing applied successfully.\n")
+
+# ----------------------------------------------------------------------------
+# Inverse centering
+# ----------------------------------------------------------------------------
+inverse_center <- function(centered_matrix, params) {
+  if (is.null(params)) {
+    cat("⚠️ No centering parameters provided, skipping.\n")
+    return(centered_matrix)
+  }
+  if (is.list(params)) {
+    restored <- sweep(centered_matrix, 2, params$mean, "+")
+    cat("✅ Inverse centering applied using stored mean values.\n")
+  } else {
+    restored <- centered_matrix
+  }
+  return(restored)
+}
+
+# Apply inverse centering
+forecast_original_scale <- inverse_center(forecast_inverse_diff, centering_params)
+cat("✅ Forecast restored to original scale.\n")
+
+# Optional debug
+cat("Forecast (original scale) range:", round(range(forecast_original_scale, na.rm=TRUE), 3), "\n")
+
+
 cat("✅ Stable forecasting completed successfully\n")
 
 # Debug: Print forecast summary
@@ -230,6 +326,8 @@ for (r in colnames(test_data)) {
 
 cat("✅ Evaluation completed\n\n")
 print(region_eval)
+
+
 
 # ----------------------------------------------------------------------------
 # 6) Visualization: Forecast vs Actual per Region

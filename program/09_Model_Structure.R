@@ -1,426 +1,154 @@
 # ============================================================================
-# STARMA Forecasting Pipeline - Phase 3: STARIMA Estimation
-# File: 09_Model_Structure.R
-# Purpose: Create AR and MA mask matrices based on STACF/STPACF identification
-# Author: STARMA Analysis
-# Date: 2024
+# STARMA Forecasting Pipeline - Phase 3b: Automatic STARIMA Order Selection (All Weights)
+# File   : 09_Auto_STARIMA_Selection_All_Weights.R
+# Purpose: Automatically select optimal STARIMA(p,d,q) per spatial weight (Uniform, Distance, Correlation)
+# Author : STARMA Analysis
+# Date   : 2025
 # ============================================================================
 
-# Load identification results
-load("output/07_stacf_analysis.RData")
-load("output/08_stpacf_analysis.RData")
-load("output/05_spatial_weights.RData")
+cat("🚀 Starting AUTO STARIMA ORDER SELECTION (ALL WEIGHTS)...\n\n")
 
-cat("=== STARMA MODEL STRUCTURE DEFINITION ===\n")
-cat("Creating AR and MA mask matrices based on identification results...\n\n")
-
-# ============================================================================
-# IDENTIFICATION RESULTS SUMMARY
-# ============================================================================
-
-cat("📊 STACF/STPACF Identification Summary:\n")
-cat("=====================================\n")
-
-# Display identified orders
-cat("STACF Results (MA Order):\n")
-if (exists("uniform_ma") && !is.null(uniform_ma)) {
-  cat("- Uniform weights: MA(", uniform_ma$suggested_q, ")\n")
-}
-if (exists("distance_ma") && !is.null(distance_ma)) {
-  cat("- Distance weights: MA(", distance_ma$suggested_q, ")\n")
-}
-if (exists("correlation_ma") && !is.null(correlation_ma)) {
-  cat("- Correlation weights: MA(", correlation_ma$suggested_q, ")\n")
-}
-
-cat("\nSTPACF Results (AR Order):\n")
-if (exists("uniform_ar") && !is.null(uniform_ar)) {
-  cat("- Uniform weights: AR(", uniform_ar$suggested_p, ")\n")
-}
-if (exists("distance_ar") && !is.null(distance_ar)) {
-  cat("- Distance weights: AR(", distance_ar$suggested_p, ")\n")
-}
-if (exists("correlation_ar") && !is.null(correlation_ar)) {
-  cat("- Correlation weights: AR(", correlation_ar$suggested_p, ")\n")
-}
-
-cat("\n🎯 Identified STARIMA Models:\n")
-if (exists("uniform_ar") && exists("uniform_ma") && !is.null(uniform_ar) && !is.null(uniform_ma)) {
-  cat("- Uniform weights: STARIMA(", uniform_ar$suggested_p, ",0,", uniform_ma$suggested_q, ")\n")
-}
-if (exists("distance_ar") && exists("distance_ma") && !is.null(distance_ar) && !is.null(distance_ma)) {
-  cat("- Distance weights: STARIMA(", distance_ar$suggested_p, ",0,", distance_ma$suggested_q, ")\n")
-}
-if (exists("correlation_ar") && exists("correlation_ma") && !is.null(correlation_ar) && !is.null(correlation_ma)) {
-  cat("- Correlation weights: STARIMA(", correlation_ar$suggested_p, ",0,", correlation_ma$suggested_q, ")\n")
-}
-
-# ============================================================================
-# MODEL STRUCTURE PARAMETERS
-# ============================================================================
-
-# Get spatial dimensions
-n_regions <- 5  # Number of regions
-max_spatial_lag <- 2  # Maximum spatial lag (from spatial weights)
-
-# Get identified orders (use uniform as reference since all are identical)
-if (exists("uniform_ar") && !is.null(uniform_ar)) {
-  p_order <- uniform_ar$suggested_p  # AR order
-} else {
-  p_order <- 1  # Default AR(1)
-}
-
-if (exists("uniform_ma") && !is.null(uniform_ma)) {
-  q_order <- uniform_ma$suggested_q  # MA order
-} else {
-  q_order <- 2  # Default MA(2)
-}
-
-d_order <- 0  # Integration order (data already stationary)
-
-cat("\n📋 Model Structure Parameters:\n")
-cat("- Number of regions (N):", n_regions, "\n")
-cat("- Maximum spatial lag (S):", max_spatial_lag, "\n")
-cat("- AR order (p):", p_order, "\n")
-cat("- Integration order (d):", d_order, "\n")
-cat("- MA order (q):", q_order, "\n")
-cat("- Model specification: STARIMA(", p_order, ",", d_order, ",", q_order, ")\n\n")
-
-# ============================================================================
-# AR MASK MATRIX CREATION
-# ============================================================================
-
-cat("🔧 Creating AR Mask Matrices...\n")
-
-# AR mask matrix dimensions: [spatial_lag, temporal_lag]
-# For STARIMA(1,0,2): AR has 1 temporal lag, up to max_spatial_lag spatial lags
-
-create_ar_mask <- function(p_order, max_spatial_lag) {
-  # AR mask matrix: rows = spatial lags (0 to max_spatial_lag), cols = temporal lags (1 to p_order)
-  ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = p_order)
-  
-  # Set AR parameters to be estimated
-  # For AR(1): estimate AR parameters at temporal lag 1 for all spatial lags
-  if (p_order >= 1) {
-    ar_mask[, 1] <- 1  # All spatial lags at temporal lag 1
+# ----------------------------------------------------------------------------
+# 1️⃣ Libraries
+# ----------------------------------------------------------------------------
+required_packages <- c("starma", "dplyr")
+for (pkg in required_packages) {
+  if (!require(pkg, character.only = TRUE)) {
+    install.packages(pkg, dependencies = TRUE)
+    library(pkg, character.only = TRUE)
   }
-  
-  # Additional temporal lags if p_order > 1
-  if (p_order >= 2) {
-    ar_mask[, 2] <- 1  # All spatial lags at temporal lag 2
-  }
-  
-  if (p_order >= 3) {
-    ar_mask[, 3] <- 1  # All spatial lags at temporal lag 3
-  }
-  
-  return(ar_mask)
 }
 
-# Create AR mask matrix
-ar_mask <- create_ar_mask(p_order, max_spatial_lag)
+# ----------------------------------------------------------------------------
+# 2️⃣ Load Data and Spatial Weights
+# ----------------------------------------------------------------------------
+load("output/04_centered_data.RData")   # centered_matrix
+load("output/05_spatial_weights.RData") # spatial_weights
 
-cat("AR Mask Matrix Structure:\n")
-cat("- Dimensions:", dim(ar_mask), "(spatial_lags x temporal_lags)\n")
-cat("- Total AR parameters:", sum(ar_mask), "\n")
+cat("📦 Data & spatial weights loaded successfully!\n")
+cat("- Data dimensions:", dim(centered_matrix), "\n\n")
 
-# Display AR mask
-cat("\nAR Mask Matrix:\n")
-rownames(ar_mask) <- paste("Spatial_Lag", 0:max_spatial_lag)
-colnames(ar_mask) <- paste("Temporal_Lag", 1:p_order)
-# print(ar_mask)
+# ----------------------------------------------------------------------------
+# 3️⃣ Define Weight Matrices
+# ----------------------------------------------------------------------------
+wlist_uniform <- list(diag(ncol(centered_matrix)), spatial_weights$uniform)
+wlist_distance <- list(diag(ncol(centered_matrix)), spatial_weights$distance)
+wlist_correlation <- list(diag(ncol(centered_matrix)), spatial_weights$correlation)
 
-# ============================================================================
-# MA MASK MATRIX CREATION
-# ============================================================================
-
-cat("\n🔧 Creating MA Mask Matrices...\n")
-
-# MA mask matrix dimensions: [spatial_lag, temporal_lag]
-# For STARIMA(1,0,2): MA has 2 temporal lags, up to max_spatial_lag spatial lags
-
-create_ma_mask <- function(q_order, max_spatial_lag) {
-  # MA mask matrix: rows = spatial lags (0 to max_spatial_lag), cols = temporal lags (1 to q_order)
-  ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = q_order)
-  
-  # Set MA parameters to be estimated
-  # For MA(2): estimate MA parameters at temporal lags 1 and 2 for all spatial lags
-  if (q_order >= 1) {
-    ma_mask[, 1] <- 1  # All spatial lags at temporal lag 1
-  }
-  
-  if (q_order >= 2) {
-    ma_mask[, 2] <- 1  # All spatial lags at temporal lag 2
-  }
-  
-  if (q_order >= 3) {
-    ma_mask[, 3] <- 1  # All spatial lags at temporal lag 3
-  }
-  
-  return(ma_mask)
-}
-
-# Create MA mask matrix
-ma_mask <- create_ma_mask(q_order, max_spatial_lag)
-
-cat("MA Mask Matrix Structure:\n")
-cat("- Dimensions:", dim(ma_mask), "(spatial_lags x temporal_lags)\n")
-cat("- Total MA parameters:", sum(ma_mask), "\n")
-
-# Display MA mask
-cat("\nMA Mask Matrix:\n")
-rownames(ma_mask) <- paste("Spatial_Lag", 0:max_spatial_lag)
-colnames(ma_mask) <- paste("Temporal_Lag", 1:q_order)
-# print(ma_mask)
+weight_types <- list(
+  uniform = wlist_uniform,
+  distance = wlist_distance,
+  correlation = wlist_correlation
+)
 
 # ============================================================================
-# PARAMETER STRUCTURE ANALYSIS
+# 4️⃣ Define Auto Selection Function
 # ============================================================================
-
-cat("\n📊 Parameter Structure Analysis:\n")
-cat("================================\n")
-
-# Count parameters
-total_ar_params <- sum(ar_mask)
-total_ma_params <- sum(ma_mask)
-total_params <- total_ar_params + total_ma_params
-
-cat("Parameter Count Summary:\n")
-cat("- AR parameters:", total_ar_params, "\n")
-cat("- MA parameters:", total_ma_params, "\n")
-cat("- Total parameters:", total_params, "\n")
-cat("- Parameters per region:", total_params, "\n")
-
-# Parameter interpretation
-cat("\nParameter Interpretation:\n")
-cat("AR Parameters (", total_ar_params, " total):\n")
-for (s in 0:max_spatial_lag) {
-  for (t in 1:p_order) {
-    if (ar_mask[s+1, t] == 1) {
-      cat("  - AR_", s, ",", t, ": Autoregressive effect from spatial lag ", s, " at temporal lag ", t, "\n")
+auto_starima_selection <- function(data, wlist, max_p = 3, max_d = 1, max_q = 3) {
+  cat("🔍 Running auto STARIMA selection...\n")
+  cat("Testing p:", 0:max_p, "d:", 0:max_d, "q:", 0:max_q, "\n\n")
+  
+  results <- data.frame(p = integer(), d = integer(), q = integer(),
+                        AIC = numeric(), BIC = numeric(), Shapiro_P = numeric(),
+                        Success = logical(), stringsAsFactors = FALSE)
+  
+  best_model <- NULL
+  best_bic <- Inf
+  
+  for (p in 0:max_p) {
+    for (d in 0:max_d) {
+      for (q in 0:max_q) {
+        if (p == 0 && q == 0) next
+        cat(sprintf("Testing STARIMA(%d,%d,%d)... ", p, d, q))
+        
+        tryCatch({
+          ar_mask <- if (p > 0) array(1, dim = c(p, length(wlist))) else NULL
+          ma_mask <- if (q > 0) array(1, dim = c(q, length(wlist))) else NULL
+          
+          model <- starma(data = data, ar = ar_mask, ma = ma_mask, wlist = wlist, iterate = 50)
+          
+          residuals <- as.vector(model$residuals)
+          n <- length(residuals)
+          k <- length(c(model$phi, model$theta))
+          sigma2 <- sum(residuals^2, na.rm = TRUE) / n
+          loglik <- -0.5 * n * (log(2 * pi * sigma2) + 1)
+          aic <- -2 * loglik + 2 * k
+          bic <- -2 * loglik + log(n) * k
+          shapiro_p <- if (n > 3 && n < 5000) shapiro.test(residuals)$p.value else NA
+          
+          results <- rbind(results, data.frame(
+            p = p, d = d, q = q,
+            AIC = aic, BIC = bic, Shapiro_P = shapiro_p,
+            Success = TRUE
+          ))
+          
+          if (bic < best_bic) {
+            best_bic <- bic
+            best_model <- list(model = model, order = c(p, d, q),
+                               aic = aic, bic = bic, loglik = loglik, shapiro_p = shapiro_p)
+          }
+          cat("✅ BIC:", round(bic, 3), "\n")
+          
+        }, error = function(e) {
+          cat("❌ Error:", substr(e$message, 1, 40), "...\n")
+          results <<- rbind(results, data.frame(
+            p = p, d = d, q = q,
+            AIC = NA, BIC = NA, Shapiro_P = NA, Success = FALSE
+          ))
+        })
+      }
     }
   }
-}
-
-cat("\nMA Parameters (", total_ma_params, " total):\n")
-for (s in 0:max_spatial_lag) {
-  for (t in 1:q_order) {
-    if (ma_mask[s+1, t] == 1) {
-      cat("  - MA_", s, ",", t, ": Moving average effect from spatial lag ", s, " at temporal lag ", t, "\n")
-    }
-  }
-}
-
-# ============================================================================
-# MODEL COMPLEXITY ASSESSMENT
-# ============================================================================
-
-cat("\n🎯 Model Complexity Assessment:\n")
-cat("===============================\n")
-
-# Calculate model complexity metrics
-n_observations <- 108  # Training data size
-complexity_ratio <- total_params / n_observations
-parsimony_score <- n_observations / total_params
-
-cat("Complexity Metrics:\n")
-cat("- Total parameters:", total_params, "\n")
-cat("- Training observations:", n_observations, "\n")
-cat("- Parameter-to-observation ratio:", round(complexity_ratio, 4), "\n")
-cat("- Parsimony score (obs/params):", round(parsimony_score, 2), "\n")
-
-# Complexity assessment
-if (complexity_ratio < 0.1) {
-  complexity_level <- "LOW (Good)"
-} else if (complexity_ratio < 0.2) {
-  complexity_level <- "MODERATE (Acceptable)"
-} else {
-  complexity_level <- "HIGH (May overfit)"
-}
-
-cat("- Complexity level:", complexity_level, "\n")
-
-# Degrees of freedom
-df <- n_observations - total_params
-cat("- Degrees of freedom:", df, "\n")
-
-if (df > 50) {
-  df_assessment <- "SUFFICIENT (Good)"
-} else if (df > 20) {
-  df_assessment <- "ADEQUATE (Acceptable)"
-} else {
-  df_assessment <- "LIMITED (Concerning)"
-}
-
-cat("- Degrees of freedom assessment:", df_assessment, "\n")
-
-# ============================================================================
-# VISUALIZATION OF MODEL STRUCTURE
-# ============================================================================
-
-cat("\n📊 Creating Model Structure Visualizations...\n")
-
-library(ggplot2)
-library(gridExtra)
-
-# Function to create mask visualization
-create_mask_plot <- function(mask_matrix, title, filename) {
-  # Convert matrix to data frame for ggplot
-  mask_df <- expand.grid(
-    Spatial_Lag = 0:(nrow(mask_matrix)-1),
-    Temporal_Lag = 1:ncol(mask_matrix)
+  
+  results <- results[order(results$BIC, na.last = TRUE), ]
+  cat("\n🏁 Auto-selection completed. Total models tested:", nrow(results), "\n")
+  
+  list(
+    best_model = best_model,
+    all_results = results,
+    top_5 = head(results[results$Success == TRUE, ], 5)
   )
-  mask_df$Parameter <- as.vector(mask_matrix)
-  mask_df$Estimated <- ifelse(mask_df$Parameter == 1, "Yes", "No")
-  
-  # Create plot
-  p <- ggplot(mask_df, aes(x = Temporal_Lag, y = Spatial_Lag, fill = Estimated)) +
-    geom_tile(color = "white", size = 1) +
-    scale_fill_manual(values = c("No" = "lightgray", "Yes" = "darkblue")) +
-    labs(title = paste("STARIMA Model Structure:", title),
-         subtitle = paste("Total parameters:", sum(mask_matrix)),
-         x = "Temporal Lag", y = "Spatial Lag") +
-    theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5),
-          plot.subtitle = element_text(hjust = 0.5)) +
-    scale_x_continuous(breaks = 1:ncol(mask_matrix)) +
-    scale_y_continuous(breaks = 0:(nrow(mask_matrix)-1))
-  
-  # Add parameter labels
-  param_labels <- mask_df[mask_df$Parameter == 1, ]
-  if (nrow(param_labels) > 0) {
-    p <- p + geom_text(data = param_labels, 
-                       aes(x = Temporal_Lag, y = Spatial_Lag, label = "1"),
-                       color = "white", size = 4, fontface = "bold")
-  }
-  
-  # # Save and display
-  # ggsave(filename, p, width = 8, height = 6, dpi = 300)
-  # print(p)
-  
-  # cat("✅", title, "structure plot saved:", filename, "\n")
-  
-  return(p)
 }
 
-# Create AR mask plot
-ar_plot <- create_mask_plot(ar_mask, "AR Mask Matrix", "plots/09_ar_mask_structure.png")
+# ============================================================================
+# 5️⃣ Execute Auto Selection for Each Weight Type
+# ============================================================================
+auto_all_results <- list()
+summary_table <- data.frame()
 
-# Create MA mask plot
-ma_plot <- create_mask_plot(ma_mask, "MA Mask Matrix", "plots/09_ma_mask_structure.png")
-
-# # Create combined plot
-# combined_plot <- grid.arrange(ar_plot, ma_plot, ncol = 2,
-#                               top = paste("STARIMA(", p_order, ",", d_order, ",", q_order, ") Model Structure"))
-
-# ggsave("plots/09_combined_mask_structure.png", combined_plot, width = 14, height = 6, dpi = 300)
-# cat("✅ Combined model structure plot saved: plots/09_combined_mask_structure.png\n")
+for (w in names(weight_types)) {
+  cat("\n=============================================================\n")
+  cat("⚙️ Running AUTO STARIMA for", toupper(w), "weights...\n")
+  cat("=============================================================\n")
+  
+  res <- auto_starima_selection(centered_matrix, weight_types[[w]], max_p = 3, max_d = 1, max_q = 3)
+  auto_all_results[[w]] <- res
+  
+  if (!is.null(res$best_model)) {
+    ord <- res$best_model$order
+    summary_table <- rbind(summary_table, data.frame(
+      Weight = toupper(w),
+      p = ord[1], d = ord[2], q = ord[3],
+      AIC = round(res$best_model$aic, 2),
+      BIC = round(res$best_model$bic, 2),
+      Shapiro_P = round(res$best_model$shapiro_p, 4)
+    ))
+    
+    save(res, file = paste0("output/auto_starima_selection_", w, ".RData"))
+    cat("💾 Saved:", paste0("output/auto_starima_selection_", w, ".RData"), "\n")
+  }
+}
 
 # ============================================================================
-# MODEL SPECIFICATION SUMMARY
+# 6️⃣ Summary Comparison
 # ============================================================================
+cat("\n📊 STARIMA ORDER SELECTION SUMMARY (ALL WEIGHTS)\n")
+cat("=============================================================\n")
+print(summary_table)
 
-cat("\n📋 Model Specification Summary:\n")
-cat("===============================\n")
+# Save combined summary
+save(auto_all_results, summary_table, file = "output/auto_starima_selection_all_weights.RData")
 
-# Create comprehensive summary
-model_specification <- list(
-  model_type = paste("STARIMA(", p_order, ",", d_order, ",", q_order, ")", sep = ""),
-  spatial_dimensions = list(
-    n_regions = n_regions,
-    max_spatial_lag = max_spatial_lag
-  ),
-  temporal_dimensions = list(
-    ar_order = p_order,
-    integration_order = d_order,
-    ma_order = q_order
-  ),
-  parameter_structure = list(
-    ar_mask = ar_mask,
-    ma_mask = ma_mask,
-    total_ar_params = total_ar_params,
-    total_ma_params = total_ma_params,
-    total_params = total_params
-  ),
-  complexity_metrics = list(
-    parameter_ratio = complexity_ratio,
-    parsimony_score = parsimony_score,
-    degrees_of_freedom = df,
-    complexity_level = complexity_level,
-    df_assessment = df_assessment
-  ),
-  estimation_ready = TRUE
-)
-
-# Display summary table
-summary_table <- data.frame(
-  Aspect = c("Model Type", "Spatial Regions", "Max Spatial Lag", 
-             "AR Order", "Integration Order", "MA Order",
-             "AR Parameters", "MA Parameters", "Total Parameters",
-             "Complexity Level", "DF Assessment", "Ready for Estimation"),
-  Value = c(model_specification$model_type,
-            model_specification$spatial_dimensions$n_regions,
-            model_specification$spatial_dimensions$max_spatial_lag,
-            model_specification$temporal_dimensions$ar_order,
-            model_specification$temporal_dimensions$integration_order,
-            model_specification$temporal_dimensions$ma_order,
-            model_specification$parameter_structure$total_ar_params,
-            model_specification$parameter_structure$total_ma_params,
-            model_specification$parameter_structure$total_params,
-            model_specification$complexity_metrics$complexity_level,
-            model_specification$complexity_metrics$df_assessment,
-            ifelse(model_specification$estimation_ready, "✅ YES", "❌ NO")),
-  stringsAsFactors = FALSE
-)
-
-# print(summary_table)
-
-# ============================================================================
-# SAVE RESULTS
-# ============================================================================
-
-# Save model structure
-save(ar_mask, ma_mask, model_specification, summary_table,
-     p_order, q_order, d_order, n_regions, max_spatial_lag,
-     total_ar_params, total_ma_params, total_params,
-     file = "output/09_model_structure.RData")
-
-# Display in viewer
-cat("\n=== DATA VIEWER ===\n")
-cat("Opening model specification summary in viewer...\n")
-View(summary_table, title = "STARIMA Model Specification Summary")
-
-cat("Opening AR mask matrix in viewer...\n")
-View(ar_mask, title = "AR Mask Matrix")
-
-cat("Opening MA mask matrix in viewer...\n")
-View(ma_mask, title = "MA Mask Matrix")
-
-# ============================================================================
-# COMPLETION SUMMARY
-# ============================================================================
-
-cat("\n=== MODEL STRUCTURE DEFINITION COMPLETED ===\n")
-cat("✅ AR mask matrix created (", total_ar_params, "parameters)\n")
-cat("✅ MA mask matrix created (", total_ma_params, "parameters)\n")
-cat("✅ Parameter structure defined and analyzed\n")
-cat("✅ Model complexity assessed (", complexity_level, ")\n")
-cat("✅ Visualization plots generated (3 plots)\n")
-cat("✅ Model specification summary created\n")
-cat("✅ Results saved to: output/09_model_structure.RData\n")
-cat("✅ All matrices available in RStudio viewer\n\n")
-
-cat("📊 PHASE 3 PROGRESS: 1/4 files completed (25%)\n")
-cat("🎯 Ready for STARIMA Model Estimation\n")
-cat("📁 Next files: 10a_STARIMA_Estimation_Uniform.R\n\n")
-
-cat("Model Structure validation:\n")
-cat("- AR/MA masks created: ✅\n")
-cat("- Parameter structure defined: ✅\n")
-cat("- Complexity assessed: ✅\n")
-cat("- Ready for estimation: ✅\n")
-
-cat("\n🎉 STARIMA(", p_order, ",", d_order, ",", q_order, ") model structure successfully defined!\n")
-cat("Total parameters to estimate:", total_params, "\n")
-cat("Model complexity:", complexity_level, "\n")
-cat("Degrees of freedom:", df, "(", df_assessment, ")\n")
+cat("\n✅ All results saved to: output/auto_starima_selection_all_weights.RData\n")
+cat("🎯 Auto STARIMA model selection completed for all spatial weights.\n")
+cat(paste(rep("=", 70), collapse = ""), "\n")

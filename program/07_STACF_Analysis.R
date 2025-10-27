@@ -7,7 +7,7 @@
 # ============================================================================
 
 # Load training data and spatial weights
-load("output/06_data_split.RData")
+load("output/04_centered_data.RData")
 load("output/05_spatial_weights.RData")
 
 cat("=== STARMA STACF ANALYSIS ===\n")
@@ -18,10 +18,10 @@ cat("Space-Time Autocorrelation Function Analysis for MA order identification...
 # ============================================================================
 
 cat("📊 Data Information:\n")
-cat("- Training data dimensions:", dim(train_data), "\n")
-cat("- Number of regions:", ncol(train_data), "\n")
-cat("- Time periods:", nrow(train_data), "\n")
-cat("- Regions:", paste(colnames(train_data), collapse = ", "), "\n\n")
+cat("- Training data dimensions:", dim(centered_matrix), "\n")
+cat("- Number of regions:", ncol(centered_matrix), "\n")
+cat("- Time periods:", nrow(centered_matrix), "\n")
+cat("- Regions:", paste(colnames(centered_matrix), collapse = ", "), "\n\n")
 
 # Get spatial weights for analysis
 uniform_w <- spatial_weights$uniform
@@ -87,9 +87,9 @@ perform_stacf_analysis <- function(data, weights, weight_name) {
 # Perform STACF analysis for each weight matrix
 cat("=== STACF COMPUTATION ===\n")
 
-stacf_uniform <- perform_stacf_analysis(train_data, uniform_w, "Uniform")
-stacf_distance <- perform_stacf_analysis(train_data, distance_w, "Distance")
-stacf_correlation <- perform_stacf_analysis(train_data, correlation_w, "Correlation")
+stacf_uniform <- perform_stacf_analysis(centered_matrix, uniform_w, "Uniform")
+stacf_distance <- perform_stacf_analysis(centered_matrix, distance_w, "Distance")
+stacf_correlation <- perform_stacf_analysis(centered_matrix, correlation_w, "Correlation")
 
 # ============================================================================
 # STACF VISUALIZATION
@@ -100,7 +100,7 @@ cat("\n📊 Creating STACF Visualizations...\n")
 # Function to create STACF heatmap
 create_stacf_heatmap <- function(stacf_result, title, filename) {
   if (!stacf_result$success) {
-    cat("⚠️ Skipping visualization for", title, "due to computation error\n")
+    cat("⚠ Skipping visualization for", title, "due to computation error\n")
     return(NULL)
   }
   
@@ -121,7 +121,7 @@ create_stacf_heatmap <- function(stacf_result, title, filename) {
     p <- ggplot(stacf_df, aes(x = Space_Lag, y = Time_Lag, fill = STACF_Value)) +
       geom_tile(color = "white", size = 0.5) +
       scale_fill_gradient2(low = "blue", mid = "white", high = "red", 
-                          midpoint = 0, name = "STACF") +
+                           midpoint = 0, name = "STACF") +
       labs(title = paste("STACF Analysis:", title),
            x = "Spatial Lag", y = "Temporal Lag") +
       theme_minimal() +
@@ -157,7 +157,7 @@ cat("\n📊 Creating ACF-style STACF plots...\n")
 # Function to create ACF-style plot
 create_acf_style_plot <- function(stacf_result, title, filename) {
   if (!stacf_result$success) {
-    cat("⚠️ Skipping ACF-style plot for", title, "due to computation error\n")
+    cat("⚠ Skipping ACF-style plot for", title, "due to computation error\n")
     return(NULL)
   }
   
@@ -175,7 +175,7 @@ create_acf_style_plot <- function(stacf_result, title, filename) {
     )
     
     # Calculate confidence bounds (approximate)
-    n <- nrow(train_data)
+    n <- nrow(centered_matrix)
     conf_bound <- 1.96 / sqrt(n)  # 95% confidence interval
     
     # Create ACF-style plot
@@ -199,8 +199,8 @@ create_acf_style_plot <- function(stacf_result, title, filename) {
     significant_lags <- which(abs(temporal_acf) > conf_bound)
     if (length(significant_lags) > 0) {
       p <- p + annotate("text", x = max(acf_df$Lag) * 0.8, y = max(temporal_acf) * 0.9,
-                       label = paste("Significant lags:", paste(significant_lags, collapse = ", ")),
-                       size = 3, color = "red")
+                        label = paste("Significant lags:", paste(significant_lags, collapse = ", ")),
+                        size = 3, color = "red")
     }
     
     # Save and display plot
@@ -240,7 +240,7 @@ if (!is.null(acf_plot1) && !is.null(acf_plot2) && !is.null(acf_plot3)) {
   )
   
   # Calculate confidence bounds
-  n <- nrow(train_data)
+  n <- nrow(centered_matrix)
   conf_bound <- 1.96 / sqrt(n)
   
   # Create combined plot
@@ -339,7 +339,7 @@ suggest_ma_order <- function(analysis) {
   temporal_acf <- analysis$temporal_acf
   
   # Find where ACF becomes insignificant
-  cutoff_threshold <- 0.15
+  cutoff_threshold <- 0.1
   cutoff_point <- 0
   
   for (i in 2:length(temporal_acf)) {
@@ -416,7 +416,7 @@ print(stacf_summary)
 save(stacf_uniform, stacf_distance, stacf_correlation,
      uniform_analysis, distance_analysis, correlation_analysis,
      uniform_ma, distance_ma, correlation_ma,
-     stacf_summary, train_data,
+     stacf_summary, centered_matrix,
      file = "output/07_stacf_analysis.RData")
 
 # Display results in viewer

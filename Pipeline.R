@@ -1,4 +1,5 @@
-setwd("C:\\Users\\hp\\Documents\\Baby\\STARIMAv3")
+setwd("D:\\TUGAS AKHIR\\STARMA 3")
+
 
 source("Reset.R")
 
@@ -7,6 +8,8 @@ source("program/00_Setup.R")
 source("program/01_Load_Data.R")
 
 source("program/02_Stationarity_Test.R")
+source("program/02b_Data_Split.R")
+source("program/02c_Boxcox Transformasi.R")
 
 source("program/03_Differencing.R")
 
@@ -14,7 +17,6 @@ source("program/04_Data_Centering.R")
 
 source("program/05_Spatial_Weights.R")
 
-source("program/06_Data_Split.R")
 
 source("program/07_STACF_Analysis.R")
 
@@ -31,5 +33,5 @@ source("program/11b_Residual_Diagnostic_Distance.R")
 source("program/11c_Residual_Diagnostic_Correlation.R")
 
 source("program/12_Model_Selection.R")
-source("program/13_Residual Analysis.R")
+source("program/13_Residual Diagnostic.R")
 source("program/14_STARIMA_Forecasting_Per_Region.R")

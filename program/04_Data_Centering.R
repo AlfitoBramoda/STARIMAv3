@@ -150,8 +150,8 @@ library(ggplot2)
 library(tidyr)
 
 # Prepare data for plotting
-if (exists("differenced_dates")) {
-  plot_dates <- as.Date(differenced_dates)
+if (exists("diff_dates")) {
+  plot_dates <- as.Date(diff_dates)
 } else {
   plot_dates <- seq(as.Date("2015-01-01"), by = "month", length.out = nrow(centered_matrix))
 }
@@ -244,7 +244,7 @@ cat("✅ Centered histogram saved: plots/04_centered_histogram.png\n")
 
 # Save centered data and parameters
 save(centered_matrix, centering_params, integration_order, 
-     differenced_dates, coordinates, original_stats, centered_stats,
+     diff_dates, coordinates, original_stats, centered_stats,
      file = "output/04_centered_data.RData")
 
 cat("\n", paste(rep("=", 50), collapse = ""), "\n")

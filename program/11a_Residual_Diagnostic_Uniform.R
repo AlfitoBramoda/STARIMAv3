@@ -12,7 +12,7 @@ load("output/05_spatial_weights.RData")
 load("output/09_model_structure.RData")
 
 cat("=== RESIDUAL DIAGNOSTICS - UNIFORM WEIGHTS ===\n")
-cat("Testing white noise properties of STARIMA(1,0,2) residuals...\n\n")
+cat("Testing white noise properties of STARIMA(1,1,0) residuals...\n\n")
 
 # ============================================================================
 # SETUP AND DATA PREPARATION

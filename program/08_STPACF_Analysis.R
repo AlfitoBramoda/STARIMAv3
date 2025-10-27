@@ -7,7 +7,7 @@
 # ============================================================================
 
 # Load training data and spatial weights
-load("output/06_data_split.RData")
+load("output/04_centered_data.RData")
 load("output/05_spatial_weights.RData")
 load("output/07_stacf_analysis.RData")
 
@@ -19,10 +19,10 @@ cat("Space-Time Partial Autocorrelation Function Analysis for AR order identific
 # ============================================================================
 
 cat("📊 Data Information:\n")
-cat("- Training data dimensions:", dim(train_data), "\n")
-cat("- Number of regions:", ncol(train_data), "\n")
-cat("- Time periods:", nrow(train_data), "\n")
-cat("- Regions:", paste(colnames(train_data), collapse = ", "), "\n\n")
+cat("- Training data dimensions:", dim(centered_matrix), "\n")
+cat("- Number of regions:", ncol(centered_matrix), "\n")
+cat("- Time periods:", nrow(centered_matrix), "\n")
+cat("- Regions:", paste(colnames(centered_matrix), collapse = ", "), "\n\n")
 
 # Get spatial weights for analysis
 uniform_w <- spatial_weights$uniform
@@ -88,9 +88,9 @@ perform_stpacf_analysis <- function(data, weights, weight_name) {
 # Perform STPACF analysis for each weight matrix
 cat("=== STPACF COMPUTATION ===\n")
 
-stpacf_uniform <- perform_stpacf_analysis(train_data, uniform_w, "Uniform")
-stpacf_distance <- perform_stpacf_analysis(train_data, distance_w, "Distance")
-stpacf_correlation <- perform_stpacf_analysis(train_data, correlation_w, "Correlation")
+stpacf_uniform <- perform_stpacf_analysis(centered_matrix, uniform_w, "Uniform")
+stpacf_distance <- perform_stpacf_analysis(centered_matrix, distance_w, "Distance")
+stpacf_correlation <- perform_stpacf_analysis(centered_matrix, correlation_w, "Correlation")
 
 # ============================================================================
 # STPACF VISUALIZATION
@@ -176,7 +176,7 @@ create_pacf_style_plot <- function(stpacf_result, title, filename) {
     )
     
     # Calculate confidence bounds (approximate)
-    n <- nrow(train_data)
+    n <- nrow(centered_matrix)
     conf_bound <- 1.96 / sqrt(n)  # 95% confidence interval
     
     # Create PACF-style plot
@@ -241,7 +241,7 @@ if (!is.null(pacf_plot1) && !is.null(pacf_plot2) && !is.null(pacf_plot3)) {
   )
   
   # Calculate confidence bounds
-  n <- nrow(train_data)
+  n <- nrow(centered_matrix)
   conf_bound <- 1.96 / sqrt(n)
   
   # Create combined plot
@@ -340,7 +340,7 @@ suggest_ar_order <- function(analysis) {
   temporal_pacf <- analysis$temporal_pacf
   
   # Find where PACF becomes insignificant
-  cutoff_threshold <- 0.15
+  cutoff_threshold <- 0.1
   cutoff_point <- 0
   
   for (i in 1:length(temporal_pacf)) {
@@ -461,7 +461,7 @@ print(stpacf_summary)
 save(stpacf_uniform, stpacf_distance, stpacf_correlation,
      uniform_analysis, distance_analysis, correlation_analysis,
      uniform_ar, distance_ar, correlation_ar,
-     stpacf_summary, train_data,
+     stpacf_summary, centered_matrix,
      file = "output/08_stpacf_analysis.RData")
 
 # Display results in viewer

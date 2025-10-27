@@ -12,11 +12,11 @@ cat("🗺️ Spatial Weights Creation Started...\n")
 # spdep, ggplot2, corrplot, tidyr, gridExtra
 
 # Load centered data
-load("output/04_centered_data.RData")
-cat("📊 Data loaded: centered_matrix (", nrow(centered_matrix), "x", ncol(centered_matrix), ")\n")
+load("output/01_rainfall_data.RData")
+cat("📊 Data loaded: rainfall_matrix (", nrow(rainfall_matrix), "x", ncol(rainfall_matrix), ")\n")
 
 # Define regions and coordinates
-regions <- colnames(centered_matrix)
+regions <- colnames(rainfall_matrix)
 n_regions <- length(regions)
 
 cat("\n🗺️ Spatial Information:\n")
@@ -106,7 +106,7 @@ spatial_weights$distance <- distance_weights
 cat("\n3️⃣ Creating Correlation-based Weights Matrix...\n")
 
 # Calculate correlation matrix from centered data
-correlation_matrix <- cor(centered_matrix)
+correlation_matrix <- cor(rainfall_matrix)
 cat("Correlation matrix calculated\n")
 
 # Convert correlation to weights (absolute correlation, set diagonal to 0)
@@ -270,7 +270,7 @@ print(weights_summary)
 
 # Save all results
 save(spatial_weights, coordinates, dist_matrix, correlation_matrix,
-     weights_summary, centered_matrix, integration_order,
+     weights_summary, rainfall_matrix, integration_order,
      file = "output/05_spatial_weights.RData")
 
 cat("\n✅ Spatial weights creation completed successfully!\n")

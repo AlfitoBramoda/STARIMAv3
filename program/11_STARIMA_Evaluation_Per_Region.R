@@ -1,17 +1,17 @@
 # ============================================================================
-# STARIMA Forecasting Pipeline - Phase 4: Evaluation per Region (Fixed Version)
-# File: 11_STARIMA_Evaluation_Per_Region_FIXED.R
-# Purpose: Evaluate STARIMA model accuracy (MAE, MSE, RMSE) for each region
-# Author: STARMA Analysis
-# Date: 2024
+# STARIMA Forecasting Pipeline - Phase 4: Evaluation Per Region (All Weights)
+# File   : 11_STARIMA_Evaluation_Per_Region_All_Weights.R
+# Purpose: Evaluate STARIMA model residuals (MAE, MSE, RMSE) per region for all weights
+# Author : STARMA Analysis
+# Date   : 2025
 # ============================================================================
 
-# ============================================================================
-# LIBRARY SETUP
-# ============================================================================
-cat("🚀 Starting STARIMA Evaluation (Fixed Version)...\n\n")
+cat("🚀 Starting STARIMA Evaluation Per Region for All Weights...\n\n")
 
-required_packages <- c("Metrics", "dplyr", "ggplot2")
+# ----------------------------------------------------------------------------
+# 1️⃣ Libraries
+# ----------------------------------------------------------------------------
+required_packages <- c("Metrics", "dplyr", "ggplot2", "tidyr")
 for (pkg in required_packages) {
   if (!require(pkg, character.only = TRUE)) {
     install.packages(pkg, dependencies = TRUE)
@@ -19,123 +19,97 @@ for (pkg in required_packages) {
   }
 }
 
-# ============================================================================
-# LOAD DATA
-# ============================================================================
-load("output/10a_starima_uniform.RData")  # Model & residuals
-load("output/06_data_split.RData")        # train_data, test_data
+# ----------------------------------------------------------------------------
+# 2️⃣ Load Data
+# ----------------------------------------------------------------------------
+load("output/02b_data_split.RData")   # train_data, test_data
+regions <- colnames(train_data)
+cat("📦 Loaded training data (", nrow(train_data), "rows ×", ncol(train_data), "regions)\n\n")
 
-cat("📦 Loaded model and data successfully.\n")
-cat("- Training data dimensions:", dim(train_data), "\n\n")
+# ----------------------------------------------------------------------------
+# 3️⃣ Define model files
+# ----------------------------------------------------------------------------
+weight_types <- c("uniform", "distance", "correlation")
+model_files <- paste0("output/10", c("a","b","c"), "_starima_", weight_types, ".RData")
 
-# ============================================================================
-# FITTED VALUES HANDLING (AUTO-DETECTION)
-# ============================================================================
-cat("🔧 Checking fitted values from STARIMA model...\n")
+all_metrics <- data.frame()
 
-fitted_values <- tryCatch({
-  fv <- fitted(uniform_results$model)
-  if (is.null(fv)) stop("No fitted values found.")
-  fv
-}, error = function(e) {
-  cat("⚠️ Fitted values not available. Reconstructing manually using residuals...\n")
+# ----------------------------------------------------------------------------
+# 4️⃣ Loop over all models
+# ----------------------------------------------------------------------------
+for (i in seq_along(weight_types)) {
+  w <- weight_types[i]
+  model_file <- model_files[i]
   
-  resid_uniform <- uniform_results$model$residuals
-  if (is.null(resid_uniform)) stop("Residuals not found in model object.")
-  
-  # Ensure same dimension with training data
-  if (nrow(resid_uniform) != nrow(train_data)) {
-    min_len <- min(nrow(resid_uniform), nrow(train_data))
-    resid_uniform <- resid_uniform[1:min_len, , drop = FALSE]
-    train_data <- train_data[1:min_len, , drop = FALSE]
+  if (!file.exists(model_file)) {
+    cat("⚠️ File", model_file, "not found — skipped.\n")
+    next
   }
   
-  fitted_manual <- train_data - resid_uniform
-  cat("✅ Fitted values reconstructed manually.\n")
-  fitted_manual
-})
-
-# Ensure numeric matrix
-if (is.list(fitted_values)) fitted_values <- do.call(cbind, fitted_values)
-if (inherits(fitted_values, "ts")) fitted_values <- as.matrix(fitted_values)
-fitted_values <- apply(fitted_values, 2, as.numeric)
-
-# Sync columns
-colnames(fitted_values) <- colnames(train_data)
-regions <- colnames(train_data)
-
-cat("📊 Fitted values ready. Dimensions:", dim(fitted_values), "\n\n")
-
-# ============================================================================
-# ACCURACY METRICS PER REGION
-# ============================================================================
-region_metrics <- data.frame(
-  Region = character(),
-  MAE = numeric(),
-  MSE = numeric(),
-  RMSE = numeric(),
-  stringsAsFactors = FALSE
-)
-
-cat("⚙️ Calculating accuracy metrics per region...\n")
-
-for (r in regions) {
-  y_true <- train_data[, r]
-  y_pred <- fitted_values[, r]
+  cat("📘 Evaluating:", toupper(w), "weights...\n")
+  load(model_file)
   
-  # Skip region if all NA
-  if (all(is.na(y_pred)) || all(is.na(y_true))) next
+  results_obj <- get(paste0(w, "_results"))
+  residuals <- results_obj$model$residuals
   
-  mae_val  <- mean(abs(y_true - y_pred), na.rm = TRUE)
-  mse_val  <- mean((y_true - y_pred)^2, na.rm = TRUE)
-  rmse_val <- sqrt(mse_val)
+  if (is.null(residuals)) {
+    cat("❌ No residuals found for", w, "— skipped.\n")
+    next
+  }
   
-  region_metrics <- rbind(region_metrics,
-                          data.frame(Region = r,
-                                     MAE = round(mae_val, 4),
-                                     MSE = round(mse_val, 4),
-                                     RMSE = round(rmse_val, 4)))
+  region_metrics <- data.frame(
+    Region = regions,
+    MAE = NA, MSE = NA, RMSE = NA,
+    Weight_Type = toupper(w)
+  )
   
-  cat(sprintf("Region %-10s | MAE = %.4f | RMSE = %.4f\n", r, mae_val, rmse_val))
+  for (r in seq_along(regions)) {
+    resid <- residuals[, r]
+    mae_val <- mean(abs(resid), na.rm = TRUE)
+    mse_val <- mean(resid^2, na.rm = TRUE)
+    rmse_val <- sqrt(mse_val)
+    
+    region_metrics[r, "MAE"]  <- round(mae_val, 4)
+    region_metrics[r, "MSE"]  <- round(mse_val, 4)
+    region_metrics[r, "RMSE"] <- round(rmse_val, 4)
+  }
+  
+  all_metrics <- rbind(all_metrics, region_metrics)
+  cat("✅", toupper(w), "evaluation done.\n\n")
 }
 
-cat("\n✅ Accuracy metrics calculated successfully!\n\n")
+# ----------------------------------------------------------------------------
+# 5️⃣ Summary Table
+# ----------------------------------------------------------------------------
+cat("📊 STARIMA Residual Evaluation Summary (All Weights):\n\n")
+print(all_metrics)
 
-# ============================================================================
-# SUMMARY TABLE
-# ============================================================================
-cat("=== MODEL ACCURACY SUMMARY PER REGION ===\n")
-print(region_metrics)
-
-# ============================================================================
-# VISUALIZATION
-# ============================================================================
-cat("\n📈 Generating RMSE visualization...\n")
-
-p_rmse <- ggplot(region_metrics, aes(x = Region, y = RMSE, fill = Region)) +
-  geom_bar(stat = "identity", width = 0.6, alpha = 0.8) +
-  geom_text(aes(label = RMSE), vjust = -0.5, size = 3.5) +
-  labs(title = "STARIMA Model Accuracy per Region",
-       subtitle = "RMSE per region (Uniform Weights)",
-       x = "Region", y = "RMSE") +
-  theme_minimal() +
-  theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
-
+# ----------------------------------------------------------------------------
+# 6️⃣ Visualization
+# ----------------------------------------------------------------------------
 if (!dir.exists("plots")) dir.create("plots")
-ggsave("plots/11_starima_rmse_per_region_fixed.png", p_rmse, width = 8, height = 5, dpi = 300)
+
+p_rmse <- ggplot(all_metrics, aes(x = Region, y = RMSE, fill = Weight_Type)) +
+  geom_bar(stat = "identity", position = position_dodge(), alpha = 0.8) +
+  geom_text(aes(label = RMSE), position = position_dodge(width = 0.9), vjust = -0.3, size = 3) +
+  labs(title = "STARIMA RMSE per Region Across Spatial Weights",
+       subtitle = "Comparison of Uniform, Distance, and Correlation weights",
+       y = "RMSE", x = "Region") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.title = element_blank())
+
+ggsave("plots/11_starima_rmse_per_region_all_weights.png", p_rmse, width = 9, height = 5, dpi = 300)
 print(p_rmse)
 
-cat("✅ Visualization saved: plots/11_starima_rmse_per_region_fixed.png\n")
-
-# ============================================================================
-# SAVE RESULTS
-# ============================================================================
+# ----------------------------------------------------------------------------
+# 7️⃣ Save Output
+# ----------------------------------------------------------------------------
 if (!dir.exists("output")) dir.create("output")
+save(all_metrics, p_rmse, file = "output/11_starima_evaluation_per_region_all_weights.RData")
 
-save(region_metrics, p_rmse, file = "output/11_starima_evaluation_per_region_fixed.RData")
-
-cat("\n💾 Results saved to: output/11_starima_evaluation_per_region_fixed.RData\n")
-cat("🎯 Evaluation completed successfully!\n")
-cat("You can now compare MAE/MSE/RMSE per region just like academic Table 5.\n")
+cat("\n💾 Results saved to: output/11_starima_evaluation_per_region_all_weights.RData\n")
+cat("✅ Visualization saved: plots/11_starima_rmse_per_region_all_weights.png\n")
+cat("🎯 Evaluation per region (all weights) completed successfully.\n")
+cat(paste(rep("=", 70), collapse = ""), "\n")
