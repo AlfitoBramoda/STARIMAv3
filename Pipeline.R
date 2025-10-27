@@ -1,4 +1,4 @@
-setwd("C:\\Users\\hp\\Documents\\Baby\\STARIMAv3")
+setwd("D:\\TUGAS AKHIR\\STARIMAv3")
 
 source("Reset.R")
 
