@@ -42,6 +42,7 @@ load("output/10a_starima_uniform.RData")   # berisi: starima_uniform, uniform_re
 load("output/06_data_split.RData")         # train_data, test_data, train_time, test_time
 load("output/05_spatial_weights.RData")    # spatial_weights
 load("output/09_model_structure.RData")    # p_order, d_order, q_order
+load("output/04_centered_data.RData")      # centering_params untuk inverse transformation
 
 cat("Artifacts loaded successfully.\n")
 cat("- p,d,q = ", p_order,",", d_order,",", q_order, "\n", sep="")
@@ -178,11 +179,37 @@ for (t in 1:h) {
 
 cat("✅ Stable forecasting completed successfully\n")
 
-# Debug: Print forecast summary
+# ----------------------------------------------------------------------------
+# 5) Inverse Transformation (De-centering)
+# ----------------------------------------------------------------------------
+cat("\n🔄 Applying inverse transformation to forecasts...\n")
+
+# Create matrices for inverse transformation
+forecast_original <- forecast_matrix
+test_original <- test_data
+
+# Apply inverse centering transformation
+for (col in 1:ncol(forecast_matrix)) {
+  region_name <- colnames(forecast_matrix)[col]
+  
+  # Get centering parameters for this region
+  original_mean <- centering_params$means[col]
+  original_sd <- centering_params$sds[col]
+  
+  # Inverse transformation: x_original = (x_centered * sd) + mean
+  forecast_original[, col] <- (forecast_matrix[, col] * original_sd) + original_mean
+  test_original[, col] <- (test_data[, col] * original_sd) + original_mean
+}
+
+cat("✅ Inverse transformation completed\n")
+
+# Debug: Print forecast summary (both centered and original scale)
 cat("\n🔍 Forecast Summary:\n")
-cat("Forecast range: ", round(range(forecast_matrix, na.rm=TRUE), 4), "\n")
-cat("Actual range: ", round(range(test_data, na.rm=TRUE), 4), "\n")
-cat("Historical range: ", round(range(Y, na.rm=TRUE), 4), "\n")
+cat("Centered forecast range: ", round(range(forecast_matrix, na.rm=TRUE), 4), "\n")
+cat("Original forecast range: ", round(range(forecast_original, na.rm=TRUE), 4), "\n")
+cat("Centered actual range: ", round(range(test_data, na.rm=TRUE), 4), "\n")
+cat("Original actual range: ", round(range(test_original, na.rm=TRUE), 4), "\n")
+cat("Historical centered range: ", round(range(Y, na.rm=TRUE), 4), "\n")
 
 # Check for extreme values
 if (any(is.infinite(forecast_matrix)) || any(abs(forecast_matrix) > 100, na.rm=TRUE)) {
@@ -201,65 +228,120 @@ if (any(is.infinite(forecast_matrix)) || any(abs(forecast_matrix) > 100, na.rm=T
 }
 
 # ----------------------------------------------------------------------------
-# 5) Evaluation per Region
+# 6) Evaluation per Region (Original Scale)
 # ----------------------------------------------------------------------------
-cat("\n📊 Evaluating forecast accuracy...\n")
+cat("\n📊 Evaluating forecast accuracy on original scale...\n")
 
 region_eval <- data.frame(
-  Region = colnames(test_data),
-  MAE = NA_real_, 
-  MSE = NA_real_, 
-  RMSE = NA_real_
+  Region = colnames(test_original),
+  MAE_Centered = NA_real_,
+  RMSE_Centered = NA_real_,
+  MAE_Original = NA_real_, 
+  RMSE_Original = NA_real_
 )
 
-for (r in colnames(test_data)) {
-  actual <- as.numeric(test_data[, r])
-  pred   <- as.numeric(forecast_matrix[, r])
+for (r in colnames(test_original)) {
+  # Centered scale evaluation
+  actual_centered <- as.numeric(test_data[, r])
+  pred_centered   <- as.numeric(forecast_matrix[, r])
+  
+  # Original scale evaluation  
+  actual_original <- as.numeric(test_original[, r])
+  pred_original   <- as.numeric(forecast_original[, r])
   
   # Handle NA values
-  valid_idx <- !is.na(actual) & !is.na(pred)
+  valid_idx <- !is.na(actual_centered) & !is.na(pred_centered) & 
+               !is.na(actual_original) & !is.na(pred_original)
+  
   if (sum(valid_idx) > 0) {
-    mae_val <- mean(abs(actual[valid_idx] - pred[valid_idx]))
-    mse_val <- mean((actual[valid_idx] - pred[valid_idx])^2)
-    rmse_val <- sqrt(mse_val)
+    # Centered scale metrics
+    mae_centered <- mean(abs(actual_centered[valid_idx] - pred_centered[valid_idx]))
+    rmse_centered <- sqrt(mean((actual_centered[valid_idx] - pred_centered[valid_idx])^2))
     
-    region_eval[region_eval$Region == r, c("MAE","MSE","RMSE")] <-
-      round(c(mae_val, mse_val, rmse_val), 4)
+    # Original scale metrics
+    mae_original <- mean(abs(actual_original[valid_idx] - pred_original[valid_idx]))
+    rmse_original <- sqrt(mean((actual_original[valid_idx] - pred_original[valid_idx])^2))
+    
+    region_eval[region_eval$Region == r, c("MAE_Centered","RMSE_Centered","MAE_Original","RMSE_Original")] <-
+      round(c(mae_centered, rmse_centered, mae_original, rmse_original), 4)
   }
 }
 
 cat("✅ Evaluation completed\n\n")
 print(region_eval)
 
+# Validation: Check transformation consistency
+cat("\n🔍 Transformation Validation:\n")
+for (i in 1:nrow(region_eval)) {
+  region <- region_eval$Region[i]
+  rmse_ratio <- region_eval$RMSE_Original[i] / region_eval$RMSE_Centered[i]
+  original_sd <- centering_params$sds[i]
+  cat("Region", region, "- RMSE ratio:", round(rmse_ratio, 2), 
+      "vs Original SD:", round(original_sd, 2), "\n")
+}
+
 # ----------------------------------------------------------------------------
-# 6) Visualization: Forecast vs Actual per Region
+# 7) Visualization: Forecast vs Actual per Region (Both Scales)
 # ----------------------------------------------------------------------------
 if (!dir.exists("plots")) dir.create("plots")
 
 cat("\n📈 Generating forecast plots...\n")
-for (r in colnames(test_data)) {
-  actual_vals <- as.numeric(test_data[, r])
-  forecast_vals <- as.numeric(forecast_matrix[, r])
+for (r in colnames(test_original)) {
+  # Original scale data
+  actual_orig <- as.numeric(test_original[, r])
+  forecast_orig <- as.numeric(forecast_original[, r])
+  
+  # Centered scale data
+  actual_cent <- as.numeric(test_data[, r])
+  forecast_cent <- as.numeric(forecast_matrix[, r])
   
   # Debug info per region
-  cat("Region", r, "- Actual:", round(range(actual_vals, na.rm=TRUE), 3), 
-      "Forecast:", round(range(forecast_vals, na.rm=TRUE), 3), "\n")
+  cat("Region", r, "\n")
+  cat("  Original - Actual:", round(range(actual_orig, na.rm=TRUE), 3), 
+      "Forecast:", round(range(forecast_orig, na.rm=TRUE), 3), "\n")
+  cat("  Centered - Actual:", round(range(actual_cent, na.rm=TRUE), 3), 
+      "Forecast:", round(range(forecast_cent, na.rm=TRUE), 3), "\n")
   
-  df <- data.frame(
+  # Original scale plot
+  df_orig <- data.frame(
     Time = test_time,
-    Actual = actual_vals,
-    Forecast = forecast_vals
+    Actual = actual_orig,
+    Forecast = forecast_orig
   )
   
-  # Create plot with better visibility
-  p <- ggplot(df, aes(x = Time)) +
+  p_orig <- ggplot(df_orig, aes(x = Time)) +
     geom_line(aes(y = Actual, color = "Actual"), size = 1.2) +
     geom_line(aes(y = Forecast, color = "Forecast"), size = 1.2, linetype = "dashed") +
     geom_point(aes(y = Actual, color = "Actual"), size = 2) +
     geom_point(aes(y = Forecast, color = "Forecast"), size = 2) +
     scale_color_manual(values = c("Actual" = "black", "Forecast" = "red")) +
-    labs(title = paste("Forecast vs Actual -", r),
-         subtitle = "STARIMA Out-of-Sample (2024)",
+    labs(title = paste("Forecast vs Actual -", r, "(Original Scale)"),
+         subtitle = "STARIMA Out-of-Sample (2024) - Inverse Transformed",
+         x = "Time", y = "Rainfall (mm)",
+         color = "Series") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = .5),
+          plot.subtitle = element_text(hjust = .5),
+          legend.position = "bottom")
+  
+  ggsave(paste0("plots/14_forecast_original_", r, ".png"), p_orig, width = 10, height = 6, dpi = 300)
+  print(p_orig)
+  
+  # Centered scale plot
+  df_cent <- data.frame(
+    Time = test_time,
+    Actual = actual_cent,
+    Forecast = forecast_cent
+  )
+  
+  p_cent <- ggplot(df_cent, aes(x = Time)) +
+    geom_line(aes(y = Actual, color = "Actual"), size = 1.2) +
+    geom_line(aes(y = Forecast, color = "Forecast"), size = 1.2, linetype = "dashed") +
+    geom_point(aes(y = Actual, color = "Actual"), size = 2) +
+    geom_point(aes(y = Forecast, color = "Forecast"), size = 2) +
+    scale_color_manual(values = c("Actual" = "black", "Forecast" = "red")) +
+    labs(title = paste("Forecast vs Actual -", r, "(Centered Scale)"),
+         subtitle = "STARIMA Out-of-Sample (2024) - Standardized",
          x = "Time", y = "Rainfall (standardized)",
          color = "Series") +
     theme_minimal() +
@@ -267,40 +349,43 @@ for (r in colnames(test_data)) {
           plot.subtitle = element_text(hjust = .5),
           legend.position = "bottom")
   
-  ggsave(paste0("plots/14_forecast_", r, ".png"), p, width = 10, height = 6, dpi = 300)
-  print(p)
+  ggsave(paste0("plots/14_forecast_centered_", r, ".png"), p_cent, width = 10, height = 6, dpi = 300)
 }
 
 # ----------------------------------------------------------------------------
-# 7) Visualization: RMSE Bar Chart
+# 8) Visualization: RMSE Comparison Bar Chart
 # ----------------------------------------------------------------------------
-cat("📊 Creating RMSE bar chart...\n")
-p_rmse <- ggplot(region_eval, aes(x = Region, y = RMSE, fill = Region)) +
-  geom_bar(stat = "identity", alpha = 0.8, width = 0.6) +
-  geom_text(aes(label = RMSE), vjust = -0.5, size = 3.5) +
-  labs(title = "STARIMA Forecast Accuracy per Region (Out-of-Sample 2024)",
-       y = "RMSE", x = "Region") +
-  theme_minimal() +
-  theme(legend.position = "none",
-        plot.title = element_text(hjust = .5))
-# ggsave("plots/14_starima_forecast_rmse.png", p_rmse, width = 8, height = 5, dpi = 300)
-# print(p_rmse)
+cat("📊 Creating RMSE comparison bar chart...\n")
 
-# ----------------------------------------------------------------------------
-# 8) Save Results
-# ----------------------------------------------------------------------------
-results <- list(
-  model = starima_uniform,
-  forecast = forecast_matrix,
-  actual = test_data,
-  metrics = region_eval,
-  weights = wlist,
-  pdq = c(p_order, d_order, q_order),
-  data_used = Y
+# Reshape data for comparison plot
+rmse_comparison <- data.frame(
+  Region = rep(region_eval$Region, 2),
+  RMSE = c(region_eval$RMSE_Centered, region_eval$RMSE_Original),
+  Scale = rep(c("Centered", "Original"), each = nrow(region_eval))
 )
 
-save(results, file = "output/14_starima_forecast_fixed.RData")
+p_rmse <- ggplot(rmse_comparison, aes(x = Region, y = RMSE, fill = Scale)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
+  scale_fill_manual(values = c("Centered" = "lightblue", "Original" = "darkblue")) +
+  labs(title = "RMSE Comparison: Centered vs Original Scale",
+       subtitle = "STARIMA Forecast Accuracy by Region",
+       x = "Region", y = "RMSE",
+       fill = "Scale") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1))
 
-cat("\n💾 Results saved to: output/14_starima_forecast_fixed.RData\n")
-cat("📊 Plots saved in folder 'plots/'\n")
-cat("✅ Fixed forecasting completed successfully!\n")
+print(p_rmse)
+ggsave("plots/14_rmse_comparison.png", p_rmse, width = 10, height = 6, dpi = 300)
+
+# ----------------------------------------------------------------------------
+# 9) Save Results
+# ----------------------------------------------------------------------------
+cat("\n💾 Saving results...\n")
+save(forecast_matrix, forecast_original, test_data, test_original, 
+     region_eval, centering_params,
+     file = "output/14_forecast_results.RData")
+
+cat("✅ Results saved to: output/14_forecast_results.RData\n")
+cat("✅ Forecasting completed with inverse transformation!\n")
