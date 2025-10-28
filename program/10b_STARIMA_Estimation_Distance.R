@@ -1,18 +1,18 @@
 # ============================================================================
 # STARMA Forecasting Pipeline - Phase 3: STARIMA Estimation
-# File: 10b_STARIMA_Estimation_Distance.R
-# Purpose: Estimate STARIMA(1,0,2) model using distance-based spatial weights
+# File: 10b_STARIMA_Estimation_distance.R
+# Purpose: Estimate STARIMA(1,0,2) model using distance spatial weights
 # Author: STARMA Analysis
 # Date: 2024
 # ============================================================================
 
 # Load required data
-load("output/09_model_structure.RData")
+load("output/09_model_structure_all_weights.RData")
 load("output/05_spatial_weights.RData")
-load("output/06_data_split.RData")
+load("output/04_centered_data.RData")
 
-cat("=== STARIMA ESTIMATION - DISTANCE WEIGHTS ===\n")
-cat("Estimating STARIMA(1,0,2) model using distance-based spatial weights...\n\n")
+cat("=== STARIMA ESTIMATION - distance WEIGHTS ===\n")
+#cat("Estimating STARIMA(1,0,2) model using distance spatial weights...\n\n")
 
 # ============================================================================
 # ESTIMATION SETUP
@@ -21,7 +21,7 @@ cat("Estimating STARIMA(1,0,2) model using distance-based spatial weights...\n\n
 cat("📋 Estimation Setup:\n")
 cat("===================\n")
 cat("- Model: STARIMA(", p_order, ",", d_order, ",", q_order, ")\n")
-cat("- Spatial weights: Distance-based\n")
+cat("- Spatial weights: distance\n")
 cat("- Training data: 108 observations\n")
 cat("- Parameters to estimate:", total_params, "\n")
 cat("- Degrees of freedom:", 108 - total_params, "\n\n")
@@ -113,24 +113,29 @@ print(summary(starima_distance))
 summary_coef <- summary(starima_distance)$coefficients
 
 # Create coefficient table directly from summary
-coef_table <- data.frame(
-  Parameter = rownames(summary_coef),
-  Estimate = round(summary_coef[, "Estimate"], 4),
-  Std_Error = round(summary_coef[, "Std..Error"], 4),
-  t_value = round(summary_coef[, "t.value"], 3),
-  p_value = round(summary_coef[, "p.value"], 4),
-  Significant = ifelse(summary_coef[, "p.value"] < 0.05, "***", 
-                      ifelse(summary_coef[, "p.value"] < 0.1, "*", "")),
-  stringsAsFactors = FALSE
-)
+sm <- summary(starima_distance)
+summary_coef <- as.data.frame(sm$coefficients, stringsAsFactors = FALSE)
 
-# Handle case where rownames might be NULL
-if (is.null(rownames(summary_coef))) {
-  coef_table$Parameter <- paste0("param_", 1:nrow(summary_coef))
+# Normalize canonical column names regardless of dots/spaces
+names(summary_coef) <- sub("\\.$", "", gsub("\\s+", ".", names(summary_coef))) # "Std. Error" -> "Std.Error"
+col_map <- c(Estimate="Estimate", Std_Error="Std.Error", t_value="t.value", p_value="p.value")
+for (k in names(col_map)) {
+  if (!col_map[[k]] %in% names(summary_coef)) {
+    summary_coef[[col_map[[k]]]] <- NA_real_
+  }
 }
 
-cat("\n📋 Parameter Estimates:\n")
-print(coef_table)
+coef_table <- data.frame(
+  Parameter   = rownames(summary_coef) %||% paste0("param_", seq_len(nrow(summary_coef))),
+  Estimate    = round(summary_coef[["Estimate"]], 4),
+  Std_Error   = round(summary_coef[["Std.Error"]], 4),
+  t_value     = round(summary_coef[["t.value"]], 3),
+  p_value     = round(summary_coef[["p.value"]], 4),
+  Significant = ifelse(summary_coef[["p.value"]] < 0.05, "***",
+                       ifelse(summary_coef[["p.value"]] < 0.1, "*", "")),
+  row.names = NULL,
+  stringsAsFactors = FALSE
+)
 
 # Model fit statistics
 loglik <- ifelse(is.null(starima_distance$loglik), NA, starima_distance$loglik)
@@ -160,6 +165,23 @@ cat("=====================\n")
 
 # Extract residuals
 residuals_distance <- starima_distance$residuals
+# Ensure residuals are a 2D matrix with region columns
+if (is.null(dim(residuals_distance))) {
+  # If residuals came as a vector, reshape using train_data's dimensions
+  Tn <- nrow(train_data)
+  Rn <- ncol(train_data)
+  residuals_distance <- matrix(residuals_distance, nrow = Tn, ncol = Rn, byrow = FALSE)
+}
+
+# Ensure column names exist (inherit from training data if missing)
+if (is.null(colnames(residuals_distance)) || any(colnames(residuals_distance) == "")) {
+  colnames(residuals_distance) <- colnames(train_data)
+  # Fallback default if train_data also lacks names
+  if (any(is.na(colnames(residuals_distance))) || any(colnames(residuals_distance) == "")) {
+    colnames(residuals_distance) <- paste0("Region_", seq_len(ncol(residuals_distance)))
+  }
+}
+
 
 # Basic residual statistics (using base R functions)
 # Calculate skewness and kurtosis manually
@@ -196,6 +218,109 @@ residual_stats <- data.frame(
 
 print(residual_stats)
 
+# Compute residual ACF and PACF for diagnostic analysis
+residual_acf <- acf(as.vector(residuals_distance), plot = FALSE, lag.max = 20)
+residual_pacf <- pacf(as.vector(residuals_distance), plot = FALSE, lag.max = 20)
+
+cat("✅ Residual ACF/PACF computed for diagnostic analysis\n")
+
+# ============================================================================
+# ADDITIONAL DIAGNOSTICS: TEMPORAL & SPATIAL AUTOCORRELATION TESTS
+# ============================================================================
+
+cat("\n🧭 Additional Diagnostic Tests:\n")
+cat("===============================\n")
+
+# 1️⃣ Temporal Portmanteau (Ljung-Box) test per region
+cat("\n📈 Temporal Portmanteau (Ljung-Box) per Region:\n")
+lb_results <- lapply(seq_len(ncol(residuals_distance)), function(j) {
+  x <- residuals_distance[, j]
+  test <- Box.test(x, lag = 12, type = "Ljung")
+  data.frame(
+    Region    = colnames(residuals_distance)[j],
+    Statistic = round(unname(test$statistic), 3),
+    P_Value   = round(test$p.value, 4),
+    Result    = ifelse(test$p.value < 0.05, "Non-White (Autocorr.)", "White Noise"),
+    stringsAsFactors = FALSE
+  )
+})
+lb_table <- do.call(rbind, lb_results)
+print(lb_table)
+
+# 2️⃣ Spatial Autocorrelation (Moran's I) on residual mean
+cat("\n🌍 Spatial Autocorrelation (Moran’s I):\n")
+suppressMessages(library(spdep))
+
+# Convert distance spatial matrix to listw
+W <- spatial_weights$distance
+if (is.null(W) || nrow(W) != ncol(W)) stop("❌ Spatial weights matrix invalid or non-square.")
+listw <- mat2listw(W, style = "W")
+
+# Compute average residual per region (spatial entities)
+rbar <- colMeans(residuals_distance, na.rm = TRUE)
+
+# Validate numeric vector
+if (any(is.na(rbar))) {
+  cat("⚠️ NA detected in regional residual means — replacing with 0.\n")
+  rbar[is.na(rbar)] <- 0
+}
+
+# Check variance before running Moran's I
+if (var(rbar) == 0) {
+  cat("⚠️ All regional means identical — Moran’s I undefined.\n")
+  moran_result <- list(
+    estimate = c("Moran I statistic" = NA, "Expectation" = NA, "Variance" = NA),
+    p.value = NA_real_
+  )
+} else {
+  # Safe try-catch for moran.test
+  moran_result <- tryCatch({
+    moran.test(rbar, listw)
+  }, error = function(e) {
+    cat("⚠️ Moran's I test failed:", e$message, "\n")
+    list(estimate = c("Moran I statistic" = NA, "Expectation" = NA, "Variance" = NA),
+         p.value = NA_real_)
+  })
+}
+
+# Display results (handle NA gracefully)
+if (is.na(moran_result$p.value)) {
+  cat("❕ Moran’s I could not be computed (insufficient spatial variation)\n")
+} else {
+  cat("Moran I statistic:", round(moran_result$estimate["Moran I statistic"], 4), "\n")
+  cat("Expected value:", round(moran_result$estimate["Expectation"], 4), "\n")
+  cat("Variance:", round(moran_result$estimate["Variance"], 4), "\n")
+  cat("P-value:", round(moran_result$p.value, 4), "\n")
+  if (moran_result$p.value < 0.05) {
+    cat("🔴 Result: Spatial autocorrelation detected (residuals not fully random)\n")
+  } else {
+    cat("🟢 Result: No significant spatial autocorrelation (residuals spatially white)\n")
+  }
+}
+
+# Save diagnostic results safely
+diag_results <- list(
+  temporal_portmanteau = lb_table,
+  spatial_moran = data.frame(
+    Moran_I = ifelse(is.na(moran_result$estimate["Moran I statistic"]), NA,
+                     round(moran_result$estimate["Moran I statistic"], 4)),
+    Expectation = ifelse(is.na(moran_result$estimate["Expectation"]), NA,
+                         round(moran_result$estimate["Expectation"], 4)),
+    Variance = ifelse(is.na(moran_result$estimate["Variance"]), NA,
+                      round(moran_result$estimate["Variance"], 4)),
+    P_Value = ifelse(is.na(moran_result$p.value), NA,
+                     round(moran_result$p.value, 4)),
+    Result = ifelse(is.na(moran_result$p.value),
+                    "Not computed (flat residuals)",
+                    ifelse(moran_result$p.value < 0.05,
+                           "Spatial autocorr. detected",
+                           "No spatial autocorr."))
+  )
+)
+
+save(diag_results, file = "output/10b_starima_distance_diagnostics.RData")
+cat("\n✅ Diagnostic tests completed. Results saved to: output/10b_starima_distance_diagnostics.RData\n")
+
 # ============================================================================
 # VISUALIZATION
 # ============================================================================
@@ -207,11 +332,11 @@ library(gridExtra)
 
 # 1. Coefficient plot
 coef_plot <- ggplot(coef_table, aes(x = Parameter, y = Estimate)) +
-  geom_col(fill = "forestgreen", alpha = 0.7) +
+  geom_col(fill = "steelblue", alpha = 0.7) +
   geom_errorbar(aes(ymin = Estimate - 1.96*Std_Error, 
                     ymax = Estimate + 1.96*Std_Error), 
                 width = 0.2) +
-  labs(title = "STARIMA(1,0,2) Parameter Estimates - Distance Weights",
+  labs(title = "STARIMA(1,0,2) Parameter Estimates - distance Weights",
        subtitle = paste("Total parameters:", total_params),
        x = "Parameters", y = "Estimate") +
   theme_minimal() +
@@ -229,12 +354,12 @@ residual_ts <- data.frame(
 )
 
 residual_plot <- ggplot(residual_ts, aes(x = Time, y = Residuals)) +
-  geom_line(color = "darkgreen", alpha = 0.7) +
+  geom_line(color = "steelblue", alpha = 0.7) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
   geom_hline(yintercept = c(-2*sd(residuals_distance, na.rm = TRUE), 
-                           2*sd(residuals_distance, na.rm = TRUE)), 
+                            2*sd(residuals_distance, na.rm = TRUE)), 
              linetype = "dashed", color = "red", alpha = 0.5) +
-  labs(title = "STARIMA Residuals - Distance Weights",
+  labs(title = "STARIMA Residuals - distance Weights",
        subtitle = "Dashed lines: ±2 standard deviations",
        x = "Time", y = "Residuals") +
   theme_minimal() +
@@ -246,11 +371,11 @@ print(residual_plot)
 
 # 3. Residual distribution
 residual_hist <- ggplot(residual_ts, aes(x = Residuals)) +
-  geom_histogram(bins = 30, fill = "lightgreen", alpha = 0.7, color = "black") +
+  geom_histogram(bins = 30, fill = "lightblue", alpha = 0.7, color = "black") +
   geom_density(aes(y = after_stat(density) * length(residual_ts$Residuals) * 
-                   (max(residual_ts$Residuals, na.rm = TRUE) - min(residual_ts$Residuals, na.rm = TRUE)) / 30),
-               color = "darkgreen", linewidth = 1) +
-  labs(title = "Residual Distribution - Distance Weights",
+                     (max(residual_ts$Residuals, na.rm = TRUE) - min(residual_ts$Residuals, na.rm = TRUE)) / 30),
+               color = "steelblue", linewidth = 1) +
+  labs(title = "Residual Distribution - distance Weights",
        subtitle = "Histogram with density overlay",
        x = "Residuals", y = "Frequency") +
   theme_minimal() +
@@ -287,21 +412,22 @@ distance_results <- list(
 
 # Save results
 save(distance_results, starima_distance, coef_table, residuals_distance,
+     residual_acf, residual_pacf,
      file = "output/10b_starima_distance.RData")
 
 # Display in viewer
 cat("\n=== DATA VIEWER ===\n")
 cat("Opening coefficient table in viewer...\n")
-View(coef_table, title = "STARIMA Distance - Parameter Estimates")
+View(coef_table, title = "STARIMA distance - Parameter Estimates")
 
 cat("Opening residual statistics in viewer...\n")
-View(residual_stats, title = "STARIMA Distance - Residual Statistics")
+View(residual_stats, title = "STARIMA distance - Residual Statistics")
 
 # ============================================================================
 # COMPLETION SUMMARY
 # ============================================================================
 
-cat("\n=== STARIMA ESTIMATION COMPLETED - DISTANCE WEIGHTS ===\n")
+cat("\n=== STARIMA ESTIMATION COMPLETED - distance WEIGHTS ===\n")
 cat("✅ Model successfully estimated\n")
 cat("✅ Parameters:", total_params, "estimated\n")
 cat("✅ Significant parameters:", sum(coef_table$p_value < 0.05), "/", total_params, "\n")
@@ -313,8 +439,8 @@ cat("✅ Visualization plots generated (3 plots)\n")
 cat("✅ Results saved to: output/10b_starima_distance.RData\n")
 cat("✅ All tables available in RStudio viewer\n\n")
 
-cat("📊 PHASE 3 PROGRESS: 3/4 files completed (75%)\n")
-cat("🎯 Next step: 10c_STARIMA_Estimation_Correlation.R\n\n")
+cat("📊 PHASE 3 PROGRESS: 1/4 files completed (25%)\n")
+cat("🎯 Next step: 10b_STARIMA_Estimation_Distance.R\n\n")
 
 cat("Model validation:\n")
 cat("- Estimation convergence: ✅\n")
@@ -322,6 +448,6 @@ cat("- Parameter significance: ✅\n")
 cat("- Residual analysis: ✅\n")
 cat("- Ready for diagnostic: ✅\n")
 
-cat("\n🎉 STARIMA(1,0,2) distance weights model successfully estimated!\n")
+cat("\n🎉 STARIMA distance weights model successfully estimated!\n")
 cat("Estimation time:", round(as.numeric(estimation_time), 2), "seconds\n")
 cat("Model fit: AIC =", round(aic, 2), ", BIC =", round(bic, 2), "\n")

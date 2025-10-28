@@ -8,13 +8,15 @@ source("program/01_Load_Data.R")
 
 source("program/02_Stationarity_Test.R")
 
+source("program/02b_Data Split.R")
+
+source("program/02c_Boxcox Transform.R")
+
 source("program/03_Differencing.R")
 
 source("program/04_Data_Centering.R")
 
 source("program/05_Spatial_Weights.R")
-
-source("program/06_Data_Split.R")
 
 source("program/07_STACF_Analysis.R")
 

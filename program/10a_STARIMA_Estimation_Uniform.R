@@ -7,12 +7,12 @@
 # ============================================================================
 
 # Load required data
-load("output/09_model_structure.RData")
+load("output/09_model_structure_all_weights.RData")
 load("output/05_spatial_weights.RData")
-load("output/06_data_split.RData")
+load("output/04_centered_data.RData")
 
 cat("=== STARIMA ESTIMATION - UNIFORM WEIGHTS ===\n")
-cat("Estimating STARIMA(1,0,2) model using uniform spatial weights...\n\n")
+#cat("Estimating STARIMA(1,0,2) model using uniform spatial weights...\n\n")
 
 # ============================================================================
 # ESTIMATION SETUP
@@ -113,24 +113,29 @@ print(summary(starima_uniform))
 summary_coef <- summary(starima_uniform)$coefficients
 
 # Create coefficient table directly from summary
-coef_table <- data.frame(
-  Parameter = rownames(summary_coef),
-  Estimate = round(summary_coef[, "Estimate"], 4),
-  Std_Error = round(summary_coef[, "Std..Error"], 4),
-  t_value = round(summary_coef[, "t.value"], 3),
-  p_value = round(summary_coef[, "p.value"], 4),
-  Significant = ifelse(summary_coef[, "p.value"] < 0.05, "***", 
-                      ifelse(summary_coef[, "p.value"] < 0.1, "*", "")),
-  stringsAsFactors = FALSE
-)
+sm <- summary(starima_uniform)
+summary_coef <- as.data.frame(sm$coefficients, stringsAsFactors = FALSE)
 
-# Handle case where rownames might be NULL
-if (is.null(rownames(summary_coef))) {
-  coef_table$Parameter <- paste0("param_", 1:nrow(summary_coef))
+# Normalize canonical column names regardless of dots/spaces
+names(summary_coef) <- sub("\\.$", "", gsub("\\s+", ".", names(summary_coef))) # "Std. Error" -> "Std.Error"
+col_map <- c(Estimate="Estimate", Std_Error="Std.Error", t_value="t.value", p_value="p.value")
+for (k in names(col_map)) {
+  if (!col_map[[k]] %in% names(summary_coef)) {
+    summary_coef[[col_map[[k]]]] <- NA_real_
+  }
 }
 
-cat("\n📋 Parameter Estimates:\n")
-print(coef_table)
+coef_table <- data.frame(
+  Parameter   = rownames(summary_coef) %||% paste0("param_", seq_len(nrow(summary_coef))),
+  Estimate    = round(summary_coef[["Estimate"]], 4),
+  Std_Error   = round(summary_coef[["Std.Error"]], 4),
+  t_value     = round(summary_coef[["t.value"]], 3),
+  p_value     = round(summary_coef[["p.value"]], 4),
+  Significant = ifelse(summary_coef[["p.value"]] < 0.05, "***",
+                       ifelse(summary_coef[["p.value"]] < 0.1, "*", "")),
+  row.names = NULL,
+  stringsAsFactors = FALSE
+)
 
 # Model fit statistics
 loglik <- ifelse(is.null(starima_uniform$loglik), NA, starima_uniform$loglik)
@@ -160,6 +165,23 @@ cat("=====================\n")
 
 # Extract residuals
 residuals_uniform <- starima_uniform$residuals
+# Ensure residuals are a 2D matrix with region columns
+if (is.null(dim(residuals_uniform))) {
+  # If residuals came as a vector, reshape using train_data's dimensions
+  Tn <- nrow(train_data)
+  Rn <- ncol(train_data)
+  residuals_uniform <- matrix(residuals_uniform, nrow = Tn, ncol = Rn, byrow = FALSE)
+}
+
+# Ensure column names exist (inherit from training data if missing)
+if (is.null(colnames(residuals_uniform)) || any(colnames(residuals_uniform) == "")) {
+  colnames(residuals_uniform) <- colnames(train_data)
+  # Fallback default if train_data also lacks names
+  if (any(is.na(colnames(residuals_uniform))) || any(colnames(residuals_uniform) == "")) {
+    colnames(residuals_uniform) <- paste0("Region_", seq_len(ncol(residuals_uniform)))
+  }
+}
+
 
 # Basic residual statistics (using base R functions)
 # Calculate skewness and kurtosis manually
@@ -195,6 +217,109 @@ residual_stats <- data.frame(
 )
 
 print(residual_stats)
+
+# Compute residual ACF and PACF for diagnostic analysis
+residual_acf <- acf(as.vector(residuals_uniform), plot = FALSE, lag.max = 20)
+residual_pacf <- pacf(as.vector(residuals_uniform), plot = FALSE, lag.max = 20)
+
+cat("✅ Residual ACF/PACF computed for diagnostic analysis\n")
+
+# ============================================================================
+# ADDITIONAL DIAGNOSTICS: TEMPORAL & SPATIAL AUTOCORRELATION TESTS
+# ============================================================================
+
+cat("\n🧭 Additional Diagnostic Tests:\n")
+cat("===============================\n")
+
+# 1️⃣ Temporal Portmanteau (Ljung-Box) test per region
+cat("\n📈 Temporal Portmanteau (Ljung-Box) per Region:\n")
+lb_results <- lapply(seq_len(ncol(residuals_uniform)), function(j) {
+  x <- residuals_uniform[, j]
+  test <- Box.test(x, lag = 12, type = "Ljung")
+  data.frame(
+    Region    = colnames(residuals_uniform)[j],
+    Statistic = round(unname(test$statistic), 3),
+    P_Value   = round(test$p.value, 4),
+    Result    = ifelse(test$p.value < 0.05, "Non-White (Autocorr.)", "White Noise"),
+    stringsAsFactors = FALSE
+  )
+})
+lb_table <- do.call(rbind, lb_results)
+print(lb_table)
+
+# 2️⃣ Spatial Autocorrelation (Moran's I) on residual mean
+cat("\n🌍 Spatial Autocorrelation (Moran’s I):\n")
+suppressMessages(library(spdep))
+
+# Convert uniform spatial matrix to listw
+W <- spatial_weights$uniform
+if (is.null(W) || nrow(W) != ncol(W)) stop("❌ Spatial weights matrix invalid or non-square.")
+listw <- mat2listw(W, style = "W")
+
+# Compute average residual per region (spatial entities)
+rbar <- colMeans(residuals_uniform, na.rm = TRUE)
+
+# Validate numeric vector
+if (any(is.na(rbar))) {
+  cat("⚠️ NA detected in regional residual means — replacing with 0.\n")
+  rbar[is.na(rbar)] <- 0
+}
+
+# Check variance before running Moran's I
+if (var(rbar) == 0) {
+  cat("⚠️ All regional means identical — Moran’s I undefined.\n")
+  moran_result <- list(
+    estimate = c("Moran I statistic" = NA, "Expectation" = NA, "Variance" = NA),
+    p.value = NA_real_
+  )
+} else {
+  # Safe try-catch for moran.test
+  moran_result <- tryCatch({
+    moran.test(rbar, listw)
+  }, error = function(e) {
+    cat("⚠️ Moran's I test failed:", e$message, "\n")
+    list(estimate = c("Moran I statistic" = NA, "Expectation" = NA, "Variance" = NA),
+         p.value = NA_real_)
+  })
+}
+
+# Display results (handle NA gracefully)
+if (is.na(moran_result$p.value)) {
+  cat("❕ Moran’s I could not be computed (insufficient spatial variation)\n")
+} else {
+  cat("Moran I statistic:", round(moran_result$estimate["Moran I statistic"], 4), "\n")
+  cat("Expected value:", round(moran_result$estimate["Expectation"], 4), "\n")
+  cat("Variance:", round(moran_result$estimate["Variance"], 4), "\n")
+  cat("P-value:", round(moran_result$p.value, 4), "\n")
+  if (moran_result$p.value < 0.05) {
+    cat("🔴 Result: Spatial autocorrelation detected (residuals not fully random)\n")
+  } else {
+    cat("🟢 Result: No significant spatial autocorrelation (residuals spatially white)\n")
+  }
+}
+
+# Save diagnostic results safely
+diag_results <- list(
+  temporal_portmanteau = lb_table,
+  spatial_moran = data.frame(
+    Moran_I = ifelse(is.na(moran_result$estimate["Moran I statistic"]), NA,
+                     round(moran_result$estimate["Moran I statistic"], 4)),
+    Expectation = ifelse(is.na(moran_result$estimate["Expectation"]), NA,
+                         round(moran_result$estimate["Expectation"], 4)),
+    Variance = ifelse(is.na(moran_result$estimate["Variance"]), NA,
+                      round(moran_result$estimate["Variance"], 4)),
+    P_Value = ifelse(is.na(moran_result$p.value), NA,
+                     round(moran_result$p.value, 4)),
+    Result = ifelse(is.na(moran_result$p.value),
+                    "Not computed (flat residuals)",
+                    ifelse(moran_result$p.value < 0.05,
+                           "Spatial autocorr. detected",
+                           "No spatial autocorr."))
+  )
+)
+
+save(diag_results, file = "output/10a_starima_uniform_diagnostics.RData")
+cat("\n✅ Diagnostic tests completed. Results saved to: output/10a_starima_uniform_diagnostics.RData\n")
 
 # ============================================================================
 # VISUALIZATION
@@ -287,6 +412,7 @@ uniform_results <- list(
 
 # Save results
 save(uniform_results, starima_uniform, coef_table, residuals_uniform,
+     residual_acf, residual_pacf,
      file = "output/10a_starima_uniform.RData")
 
 # Display in viewer
@@ -322,6 +448,6 @@ cat("- Parameter significance: ✅\n")
 cat("- Residual analysis: ✅\n")
 cat("- Ready for diagnostic: ✅\n")
 
-cat("\n🎉 STARIMA(1,0,2) uniform weights model successfully estimated!\n")
+cat("\n🎉 STARIMA uniform weights model successfully estimated!\n")
 cat("Estimation time:", round(as.numeric(estimation_time), 2), "seconds\n")
 cat("Model fit: AIC =", round(aic, 2), ", BIC =", round(bic, 2), "\n")

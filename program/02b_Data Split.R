@@ -1,48 +1,50 @@
 # ============================================================================
 # STARMA Forecasting Pipeline - Phase 1: Data Preparation
-# File: 06_Data_Split.R
-# Purpose: Split centered data into training and testing sets
+# File: 01_rainfall_data.R
+# Purpose: Split rainfall data into training and testing sets
 # Author: STARMA Analysis
 # Date: 2024
 # ============================================================================
 
-# Load centered data
-load("output/04_centered_data.RData")
+# Load rainfall data
+load("output/01_rainfall_data.RData")
 
 cat("=== STARMA DATA SPLITTING ===\n")
-cat("Splitting centered data into train/test sets...\n\n")
+cat("Splitting rainfall data into train/test sets...\n\n")
+
 
 # ============================================================================
 # DATA SPLITTING CONFIGURATION
 # ============================================================================
 
-# Data dimensions (using centered_matrix from loaded file)
-n_obs <- nrow(centered_matrix)  # Total observations (120)
-n_regions <- ncol(centered_matrix)  # Number of regions (5)
+n_obs <- nrow(rainfall_matrix)   # 120
+n_regions <- ncol(rainfall_matrix)
 
-# Split configuration
-train_years <- 2015:2023  # 9 years for training
-test_year <- 2024         # 1 year for testing
-train_obs <- length(train_years) * 12  # 108 observations
-test_obs <- 12                         # 12 observations
+# Train-test split
+train_years <- 2015:2023   # 9 tahun → 108 bulan
+test_year <- 2024           # 1 tahun → 12 bulan
+
+train_obs <- length(train_years) * 12  # 108
+test_obs  <- 12                        # 12
 
 cat("Data Split Configuration:\n")
 cat("- Total observations:", n_obs, "\n")
 cat("- Number of regions:", n_regions, "\n")
-cat("- Training period: 2015-2023 (", train_obs, "obs)\n")
+cat("- Training period: 2015–2023 (", train_obs, "obs)\n")
 cat("- Testing period: 2024 (", test_obs, "obs)\n\n")
 
 # ============================================================================
 # PERFORM DATA SPLIT
 # ============================================================================
 
-# Split data
-train_data <- centered_matrix[1:train_obs, ]
-test_data <- centered_matrix[(train_obs + 1):n_obs, ]
+train_data <- rainfall_matrix[1:train_obs, ]
+test_data  <- rainfall_matrix[(train_obs + 1):n_obs, ]
 
-# Create time indices
-train_time <- seq(as.Date("2015-01-01"), as.Date("2023-12-01"), by = "month")
-test_time <- seq(as.Date("2024-01-01"), as.Date("2024-12-01"), by = "month")
+# Time indices (otomatis 108 + 12 = 120)
+train_time <- seq(as.Date("2015-01-31"), by = "month", length.out = train_obs)
+test_time <- seq(as.Date("2024-01-31"), by = "month", length.out = test_obs)
+
+
 
 # Verify split dimensions
 cat("Split Verification:\n")
@@ -117,8 +119,8 @@ p1 <- ggplot(combined_long, aes(x = Time, y = Value, color = Dataset)) +
   facet_wrap(~Region, scales = "free_y", ncol = 2) +
   scale_color_manual(values = c("Training" = "blue", "Testing" = "red")) +
   labs(title = "STARMA Data Split: Training vs Testing Sets",
-       subtitle = "Centered Data (2015-2024)",
-       x = "Time", y = "Centered Rainfall Value") +
+       subtitle = "rainfall Data (2015-2024)",
+       x = "Time", y = "rainfall Rainfall Value") +
   theme_minimal() +
   theme(legend.position = "bottom")
 
@@ -129,8 +131,8 @@ p2 <- ggplot(train_long, aes(x = Time, y = Value)) +
   geom_line(color = "blue", size = 0.8) +
   facet_wrap(~Region, scales = "free_y", ncol = 2) +
   labs(title = "Training Data for STARMA Modeling (2015-2023)",
-       subtitle = "108 observations per region - Centered data",
-       x = "Time", y = "Centered Rainfall Value") +
+       subtitle = "108 observations per region - rainfall data",
+       x = "Time", y = "rainfall Rainfall Value") +
   theme_minimal()
 
 print(p2)
@@ -140,8 +142,8 @@ p3 <- ggplot(test_long, aes(x = Time, y = Value)) +
   geom_line(color = "red", size = 0.8) +
   facet_wrap(~Region, scales = "free_y", ncol = 2) +
   labs(title = "Testing Data for Forecast Evaluation (2024)",
-       subtitle = "12 observations per region - Centered data",
-       x = "Time", y = "Centered Rainfall Value") +
+       subtitle = "12 observations per region - rainfall data",
+       x = "Time", y = "rainfall Rainfall Value") +
   theme_minimal()
 
 print(p3)
@@ -164,7 +166,7 @@ p4 <- ggplot(full_long, aes(x = Time, y = Value)) +
            vjust = 1.2, color = "red", size = 4, fontface = "bold") +
   labs(title = "Complete Dataset with Train/Test Split Boundary",
        subtitle = "Red dashed line indicates split at 2024-01-01",
-       x = "Time", y = "Centered Rainfall Value") +
+       x = "Time", y = "rainfall Rainfall Value") +
   theme_minimal()
 
 print(p4)
@@ -176,7 +178,7 @@ print(p4)
 # Save split data
 save(train_data, test_data, train_time, test_time, 
      train_summary, test_summary,
-     file = "output/06_data_split.RData")
+     file = "output/02b_data_split.RData")
 
 # Display data in viewer
 cat("=== DATA VIEWER ===\n")
@@ -195,15 +197,15 @@ cat("✅ Training data: 108 obs × 5 regions (2015-2023)\n")
 cat("✅ Testing data: 12 obs × 5 regions (2024)\n")
 cat("✅ Data summaries calculated\n")
 cat("✅ 4 visualization plots generated\n")
-cat("✅ Results saved to: output/06_data_split.RData\n")
+cat("✅ Results saved to: output/062data_split.RData\n")
 cat("✅ Data available in RStudio viewer\n\n")
 
 cat("📊 PHASE 1 DATA PREPARATION: COMPLETED!\n")
 cat("🎯 Ready for Phase 2: STARIMA Identification\n")
-cat("📁 Next file: 07_STACF_Analysis.R\n\n")
+cat("📁 Next file: 03_Stationary_Test.R\n\n")
 
 cat("Data split validation:\n")
 cat("- No data leakage: ✅\n")
 cat("- Chronological order maintained: ✅\n")
-cat("- Centered properties preserved: ✅\n")
+cat("- rainfall properties preserved: ✅\n")
 cat("- Ready for STARMA modeling: ✅\n")

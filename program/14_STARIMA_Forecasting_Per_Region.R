@@ -27,9 +27,9 @@ cat("Loading data files...\n")
 # Check if files exist
 required_files <- c(
   "output/10a_starima_uniform.RData",
-  "output/06_data_split.RData", 
+  "output/02b_data_split.RData", 
   "output/05_spatial_weights.RData",
-  "output/09_model_structure.RData"
+  "output/09_model_structure_all_weights.RData"
 )
 
 for (file in required_files) {
@@ -39,9 +39,9 @@ for (file in required_files) {
 }
 
 load("output/10a_starima_uniform.RData")   # berisi: starima_uniform, uniform_results
-load("output/06_data_split.RData")         # train_data, test_data, train_time, test_time
+load("output/02b_data_split.RData")         # train_data, test_data, train_time, test_time
 load("output/05_spatial_weights.RData")    # spatial_weights
-load("output/09_model_structure.RData")    # p_order, d_order, q_order
+load("output/09_model_structure_all_weights.RData")    # p_order, d_order, q_order
 
 cat("Artifacts loaded successfully.\n")
 cat("- p,d,q = ", p_order,",", d_order,",", q_order, "\n", sep="")
@@ -129,75 +129,203 @@ cat("✅ Spatial weights configured (", length(wlist), " lags)\n")
 h <- as.numeric(nrow(test_data))
 cat("\n🔮 Forecasting ", h, " steps ahead...\n")
 
+# Set seed for reproducible results
+set.seed(123)
+cat("🎲 Random seed set for reproducible forecasting\n")
+
 # Initialize forecast matrix
-forecast_matrix <- matrix(NA_real_, nrow = h, ncol = ncol(Y))
-colnames(forecast_matrix) <- colnames(Y)
+forecast_final <- matrix(NA_real_, nrow = h, ncol = ncol(Y))
+colnames(forecast_final) <- colnames(Y)
 
-# Simple but stable forecasting approach
-cat("🔍 Using stable forecasting approach...\n")
+# Proper STARIMA forecasting using model coefficients
+cat("🔍 Using proper STARIMA forecasting with coefficients...\n")
 
-# Get last few observations for baseline
-last_obs <- tail(Y, min(12, nrow(Y)))
-baseline <- colMeans(last_obs)
+# Get STARIMA coefficients
+phi_coef <- starima_uniform$phi
+theta_coef <- starima_uniform$theta
 
-# Simple seasonal/trend pattern
+cat("📊 STARIMA coefficients loaded:\n")
+cat("- AR (phi) matrix:", dim(phi_coef), "\n")
+if (!is.null(theta_coef)) cat("- MA (theta) matrix:", dim(theta_coef), "\n")
+
+# Get model orders
+p_order <- nrow(phi_coef)  # AR order
+q_order <- if(!is.null(theta_coef)) nrow(theta_coef) else 0  # MA order
+n_regions <- ncol(Y)
+n_obs <- nrow(Y)
+
+cat("- Model orders: AR =", p_order, ", MA =", q_order, "\n")
+cat("- Regions:", n_regions, ", Observations:", n_obs, "\n")
+
+# Initialize residuals for MA terms (simplified approach)
+residuals_hist <- matrix(0, nrow = max(p_order, q_order), ncol = n_regions)
+
+# STARIMA forecasting loop
 for (t in 1:h) {
-  # Base forecast on recent average with small variations
-  base_forecast <- baseline
+  forecast_t <- matrix(0, nrow = 1, ncol = n_regions)
   
-  # Add seasonal component (assuming monthly data)
-  if (h >= 12) {
-    seasonal_idx <- ((t - 1) %% 12) + 1
-    if (nrow(last_obs) >= 12) {
-      seasonal_factor <- last_obs[seasonal_idx, ] / baseline
-      seasonal_factor[is.na(seasonal_factor) | is.infinite(seasonal_factor)] <- 1
-      base_forecast <- base_forecast * seasonal_factor
+  # AR terms: sum over temporal and spatial lags
+  for (p in 1:p_order) {
+    # Determine which historical observation to use
+    hist_idx <- n_obs - p + t
+    
+    if (hist_idx > 0 && hist_idx <= n_obs) {
+      # Use historical data
+      Y_lag_p <- Y[hist_idx, , drop = FALSE]
+    } else if (t > p) {
+      # Use previously forecasted values
+      Y_lag_p <- forecast_final[t - p, , drop = FALSE]
+    } else {
+      # Use last available observation
+      Y_lag_p <- Y[n_obs, , drop = FALSE]
+    }
+    
+    # Apply spatial weights and AR coefficients
+    for (s in 1:ncol(phi_coef)) {  # spatial lags 0,1,2
+      phi_ps <- phi_coef[p, s]
+      
+      if (s == 1) {
+        # Spatial lag 0: direct effect (identity)
+        forecast_t <- forecast_t + phi_ps * Y_lag_p
+      } else {
+        # Spatial lag > 0: weighted neighbor effect
+        W_s <- wlist[[s]]  # spatial weight matrix
+        # Apply spatial weights: Y * W^T (each region affected by neighbors)
+        spatial_effect <- Y_lag_p %*% t(W_s)
+        forecast_t <- forecast_t + phi_ps * spatial_effect
+      }
     }
   }
   
-  # Add small random variation
-  variation <- rnorm(ncol(Y), 0, sd(last_obs, na.rm = TRUE) * 0.1)
+  # MA terms (simplified - using zero residuals for new forecasts)
+  if (!is.null(theta_coef) && q_order > 0) {
+    for (q in 1:q_order) {
+      for (s in 1:ncol(theta_coef)) {
+        theta_qs <- theta_coef[q, s]
+        # Use historical residuals (simplified as zero for forecasts)
+        if (t <= q) {
+          residual_effect <- residuals_hist[q, , drop = FALSE]
+        } else {
+          residual_effect <- matrix(0, nrow = 1, ncol = n_regions)
+        }
+        
+        if (s == 1) {
+          forecast_t <- forecast_t + theta_qs * residual_effect
+        } else {
+          W_s <- wlist[[s]]
+          spatial_residual <- residual_effect %*% t(W_s)
+          forecast_t <- forecast_t + theta_qs * spatial_residual
+        }
+      }
+    }
+  }
   
-  # Combine components
-  forecast_matrix[t, ] <- base_forecast + variation
+  # Store forecast and ensure reasonable bounds
+  forecast_final[t, ] <- as.numeric(forecast_t)
   
-  # Ensure reasonable bounds (within 3 std dev of historical data)
-  for (col in 1:ncol(Y)) {
+  # Apply bounds to prevent extreme values
+  for (col in 1:n_regions) {
     hist_mean <- mean(Y[, col], na.rm = TRUE)
     hist_sd <- sd(Y[, col], na.rm = TRUE)
     
     if (!is.na(hist_sd) && hist_sd > 0) {
       lower_bound <- hist_mean - 3 * hist_sd
       upper_bound <- hist_mean + 3 * hist_sd
-      
-      forecast_matrix[t, col] <- pmax(lower_bound, 
-                                      pmin(upper_bound, forecast_matrix[t, col]))
+      forecast_final[t, col] <- pmax(lower_bound, 
+                                    pmin(upper_bound, forecast_final[t, col]))
     }
   }
 }
 
-cat("✅ Stable forecasting completed successfully\n")
+cat("✅ STARIMA forecasting completed successfully\n")
+cat("📊 Used AR coefficients with", p_order, "temporal lags and", ncol(phi_coef), "spatial lags\n")
+
+# ----------------------------------------------------------------------------
+# 4B) Inverse Transformations (Centering → Differencing → Box-Cox)
+# ----------------------------------------------------------------------------
+cat("\n🔄 Performing inverse transformations (Centering → Differencing → Box-Cox)...\n")
+
+# Load required transformation parameters
+trans_files <- c("output/04_data_centering.RData",
+                 "output/05_differencing_results.RData",
+                 "output/03_boxcox_data.RData")
+
+for (f in trans_files) {
+  if (file.exists(f)) load(f)
+}
+
+# 1️⃣ Inverse Centering
+if (exists("centering_params")) {
+  cat("🎯 Restoring centering (mean & sd per region)...\n")
+  forecast_center_inv <- matrix(NA, nrow=nrow(forecast_final), ncol=ncol(forecast_final))
+  colnames(forecast_center_inv) <- colnames(forecast_final)
+  
+  for (r in colnames(forecast_final)) {
+    mu <- centering_params$mean[r]
+    sigma <- centering_params$sd[r]
+    forecast_center_inv[, r] <- (forecast_final[, r] * sigma) + mu
+  }
+} else {
+  cat("⚠️ Centering parameters not found, skipping inverse centering.\n")
+  forecast_center_inv <- forecast_final
+}
+
+# 2️⃣ Inverse Differencing
+if (exists("differenced_matrix")) {
+  cat("📉 Reverting differencing...\n")
+  last_train <- tail(train_data, 1)
+  
+  forecast_diff_inv <- matrix(NA, nrow=nrow(forecast_center_inv), ncol=ncol(forecast_center_inv))
+  colnames(forecast_diff_inv) <- colnames(forecast_center_inv)
+  
+  for (j in 1:ncol(forecast_center_inv)) {
+    prev <- last_train[1, j]
+    for (t in 1:nrow(forecast_center_inv)) {
+      prev <- prev + forecast_center_inv[t, j]
+      forecast_diff_inv[t, j] <- prev
+    }
+  }
+} else {
+  cat("⚠️ No differencing applied previously, skipping inverse differencing.\n")
+  forecast_diff_inv <- forecast_center_inv
+}
+
+# 3️⃣ Inverse Box-Cox
+inv_boxcox <- function(y, lambda) {
+  if (lambda == 0) return(exp(y))
+  else return(((y * lambda) + 1)^(1 / lambda))
+}
+
+if (exists("lambda_overall")) {
+  cat("📦 Applying inverse Box-Cox (λ =", round(lambda_overall, 3), ")...\n")
+  forecast_final <- apply(forecast_diff_inv, 2, inv_boxcox, lambda=lambda_overall)
+} else {
+  cat("⚠️ Box-Cox parameter not found, skipping inverse Box-Cox.\n")
+  forecast_final <- forecast_diff_inv
+}
+
+cat("✅ Inverse transformations completed successfully.\n")
 
 # Debug: Print forecast summary
 cat("\n🔍 Forecast Summary:\n")
-cat("Forecast range: ", round(range(forecast_matrix, na.rm=TRUE), 4), "\n")
+cat("Forecast range: ", round(range(forecast_final, na.rm=TRUE), 4), "\n")
 cat("Actual range: ", round(range(test_data, na.rm=TRUE), 4), "\n")
 cat("Historical range: ", round(range(Y, na.rm=TRUE), 4), "\n")
 
 # Check for extreme values
-if (any(is.infinite(forecast_matrix)) || any(abs(forecast_matrix) > 100, na.rm=TRUE)) {
+if (any(is.infinite(forecast_final)) || any(abs(forecast_final) > 100, na.rm=TRUE)) {
   cat("⚠️ Detected extreme forecast values, applying correction...\n")
   
   # Replace extreme values with reasonable estimates
-  for (col in 1:ncol(forecast_matrix)) {
-    extreme_idx <- which(is.infinite(forecast_matrix[, col]) | abs(forecast_matrix[, col]) > 10)
+  for (col in 1:ncol(forecast_final)) {
+    extreme_idx <- which(is.infinite(forecast_final[, col]) | abs(forecast_final[, col]) > 10)
     if (length(extreme_idx) > 0) {
-      forecast_matrix[extreme_idx, col] <- mean(Y[, col], na.rm = TRUE)
+      forecast_final[extreme_idx, col] <- mean(Y[, col], na.rm = TRUE)
     }
   }
   
   cat("✅ Extreme values corrected\n")
-  cat("Corrected forecast range: ", round(range(forecast_matrix, na.rm=TRUE), 4), "\n")
+  cat("Corrected forecast range: ", round(range(forecast_final, na.rm=TRUE), 4), "\n")
 }
 
 # ----------------------------------------------------------------------------
@@ -214,7 +342,7 @@ region_eval <- data.frame(
 
 for (r in colnames(test_data)) {
   actual <- as.numeric(test_data[, r])
-  pred   <- as.numeric(forecast_matrix[, r])
+  pred   <- as.numeric(forecast_final[, r])
   
   # Handle NA values
   valid_idx <- !is.na(actual) & !is.na(pred)
@@ -239,7 +367,7 @@ if (!dir.exists("plots")) dir.create("plots")
 cat("\n📈 Generating forecast plots...\n")
 for (r in colnames(test_data)) {
   actual_vals <- as.numeric(test_data[, r])
-  forecast_vals <- as.numeric(forecast_matrix[, r])
+  forecast_vals <- as.numeric(forecast_final[, r])
   
   # Debug info per region
   cat("Region", r, "- Actual:", round(range(actual_vals, na.rm=TRUE), 3), 
@@ -291,7 +419,7 @@ p_rmse <- ggplot(region_eval, aes(x = Region, y = RMSE, fill = Region)) +
 # ----------------------------------------------------------------------------
 results <- list(
   model = starima_uniform,
-  forecast = forecast_matrix,
+  forecast = forecast_final,
   actual = test_data,
   metrics = region_eval,
   weights = wlist,
