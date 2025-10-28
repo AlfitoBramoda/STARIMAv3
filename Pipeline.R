@@ -36,4 +36,5 @@ source("program/11c_Residual_Diagnostic_Correlation.R")
 
 source("program/12_Model_Selection.R")
 source("program/13_Residual Analysis.R")
-source("program/14_STARIMA_Forecasting_Per_Region.R")
+# source("program/14_STARIMA_Forecasting_Per_Region.R")
+source("program/14_STARIMA_Forecasting_All_Weights.R")
