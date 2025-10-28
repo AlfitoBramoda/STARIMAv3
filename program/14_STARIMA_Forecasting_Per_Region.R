@@ -130,8 +130,8 @@ h <- as.numeric(nrow(test_data))
 cat("\n🔮 Forecasting ", h, " steps ahead...\n")
 
 # Initialize forecast matrix
-forecast_matrix <- matrix(NA_real_, nrow = h, ncol = ncol(Y))
-colnames(forecast_matrix) <- colnames(Y)
+forecast_final <- matrix(NA_real_, nrow = h, ncol = ncol(Y))
+colnames(forecast_final) <- colnames(Y)
 
 # Simple but stable forecasting approach
 cat("🔍 Using stable forecasting approach...\n")
@@ -159,7 +159,7 @@ for (t in 1:h) {
   variation <- rnorm(ncol(Y), 0, sd(last_obs, na.rm = TRUE) * 0.1)
   
   # Combine components
-  forecast_matrix[t, ] <- base_forecast + variation
+  forecast_final[t, ] <- base_forecast + variation
   
   # Ensure reasonable bounds (within 3 std dev of historical data)
   for (col in 1:ncol(Y)) {
@@ -170,34 +170,100 @@ for (t in 1:h) {
       lower_bound <- hist_mean - 3 * hist_sd
       upper_bound <- hist_mean + 3 * hist_sd
       
-      forecast_matrix[t, col] <- pmax(lower_bound, 
-                                      pmin(upper_bound, forecast_matrix[t, col]))
+      forecast_final[t, col] <- pmax(lower_bound, 
+                                      pmin(upper_bound, forecast_final[t, col]))
     }
   }
 }
 
 cat("✅ Stable forecasting completed successfully\n")
 
+# ----------------------------------------------------------------------------
+# 4B) Inverse Transformations (Centering → Differencing → Box-Cox)
+# ----------------------------------------------------------------------------
+cat("\n🔄 Performing inverse transformations (Centering → Differencing → Box-Cox)...\n")
+
+# Load required transformation parameters
+trans_files <- c("output/04_data_centering.RData",
+                 "output/05_differencing_results.RData",
+                 "output/03_boxcox_data.RData")
+
+for (f in trans_files) {
+  if (file.exists(f)) load(f)
+}
+
+# 1️⃣ Inverse Centering
+if (exists("centering_params")) {
+  cat("🎯 Restoring centering (mean & sd per region)...\n")
+  forecast_center_inv <- matrix(NA, nrow=nrow(forecast_matrix), ncol=ncol(forecast_matrix))
+  colnames(forecast_center_inv) <- colnames(forecast_matrix)
+  
+  for (r in colnames(forecast_matrix)) {
+    mu <- centering_params$mean[r]
+    sigma <- centering_params$sd[r]
+    forecast_center_inv[, r] <- (forecast_matrix[, r] * sigma) + mu
+  }
+} else {
+  cat("⚠️ Centering parameters not found, skipping inverse centering.\n")
+  forecast_center_inv <- forecast_matrix
+}
+
+# 2️⃣ Inverse Differencing
+if (exists("differenced_matrix")) {
+  cat("📉 Reverting differencing...\n")
+  last_train <- tail(train_data, 1)
+  
+  forecast_diff_inv <- matrix(NA, nrow=nrow(forecast_center_inv), ncol=ncol(forecast_center_inv))
+  colnames(forecast_diff_inv) <- colnames(forecast_center_inv)
+  
+  for (j in 1:ncol(forecast_center_inv)) {
+    prev <- last_train[1, j]
+    for (t in 1:nrow(forecast_center_inv)) {
+      prev <- prev + forecast_center_inv[t, j]
+      forecast_diff_inv[t, j] <- prev
+    }
+  }
+} else {
+  cat("⚠️ No differencing applied previously, skipping inverse differencing.\n")
+  forecast_diff_inv <- forecast_center_inv
+}
+
+# 3️⃣ Inverse Box-Cox
+inv_boxcox <- function(y, lambda) {
+  if (lambda == 0) return(exp(y))
+  else return(((y * lambda) + 1)^(1 / lambda))
+}
+
+if (exists("lambda_overall")) {
+  cat("📦 Applying inverse Box-Cox (λ =", round(lambda_overall, 3), ")...\n")
+  forecast_final <- apply(forecast_diff_inv, 2, inv_boxcox, lambda=lambda_overall)
+} else {
+  cat("⚠️ Box-Cox parameter not found, skipping inverse Box-Cox.\n")
+  forecast_final <- forecast_diff_inv
+}
+
+cat("✅ Inverse transformations completed successfully.\n")
+
 # Debug: Print forecast summary
 cat("\n🔍 Forecast Summary:\n")
-cat("Forecast range: ", round(range(forecast_matrix, na.rm=TRUE), 4), "\n")
+cat("Forecast range: ", round(range(forecast_final, na.rm=TRUE), 4), "\n")
 cat("Actual range: ", round(range(test_data, na.rm=TRUE), 4), "\n")
 cat("Historical range: ", round(range(Y, na.rm=TRUE), 4), "\n")
 
 # Check for extreme values
-if (any(is.infinite(forecast_matrix)) || any(abs(forecast_matrix) > 100, na.rm=TRUE)) {
+if (any(is.infinite(forecast_final)) || any(abs(forecast_final) > 100, na.rm=TRUE)) {
   cat("⚠️ Detected extreme forecast values, applying correction...\n")
   
   # Replace extreme values with reasonable estimates
-  for (col in 1:ncol(forecast_matrix)) {
-    extreme_idx <- which(is.infinite(forecast_matrix[, col]) | abs(forecast_matrix[, col]) > 10)
+  for (col in 1:ncol(forecast_final)) {
+    extreme_idx <- which(is.infinite(forecast_final[, col]) | abs(forecast_final[, col]) > 10)
     if (length(extreme_idx) > 0) {
-      forecast_matrix[extreme_idx, col] <- mean(Y[, col], na.rm = TRUE)
+      forecast_final[extreme_idx, col] <- mean(Y[, col], na.rm = TRUE)
     }
   }
   
   cat("✅ Extreme values corrected\n")
-  cat("Corrected forecast range: ", round(range(forecast_matrix, na.rm=TRUE), 4), "\n")
+  cat("Corrected forecast range: ", round(range(forecast_final, na.rm=TRUE), 4), "\n")
 }
 
 # ----------------------------------------------------------------------------
@@ -214,7 +280,7 @@ region_eval <- data.frame(
 
 for (r in colnames(test_data)) {
   actual <- as.numeric(test_data[, r])
-  pred   <- as.numeric(forecast_matrix[, r])
+  pred   <- as.numeric(forecast_final[, r])
   
   # Handle NA values
   valid_idx <- !is.na(actual) & !is.na(pred)
@@ -239,7 +305,7 @@ if (!dir.exists("plots")) dir.create("plots")
 cat("\n📈 Generating forecast plots...\n")
 for (r in colnames(test_data)) {
   actual_vals <- as.numeric(test_data[, r])
-  forecast_vals <- as.numeric(forecast_matrix[, r])
+  forecast_vals <- as.numeric(forecast_final[, r])
   
   # Debug info per region
   cat("Region", r, "- Actual:", round(range(actual_vals, na.rm=TRUE), 3), 
@@ -291,7 +357,7 @@ p_rmse <- ggplot(region_eval, aes(x = Region, y = RMSE, fill = Region)) +
 # ----------------------------------------------------------------------------
 results <- list(
   model = starima_uniform,
-  forecast = forecast_matrix,
+  forecast = forecast_final,
   actual = test_data,
   metrics = region_eval,
   weights = wlist,

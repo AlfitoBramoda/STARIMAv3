@@ -1,238 +1,176 @@
 # ============================================================================
-# 03_Differencing.R - Data Differencing for Stationarity
+# 03_Differencing.R - Seasonal Differencing after Box-Cox (Train 2015–2023)
 # ============================================================================
-# Purpose: Apply differencing to achieve stationarity based on Python-style ADF results
-# Author: STARMA Project
-# Date: 2024
+# Purpose : Use Box-Cox transformed data (final_data) and apply seasonal
+#           differencing D=1 with period s=12 on TRAIN set only
+# Author  : STARMA Project
+# Date    : 2024
 # ============================================================================
 
-cat("🔄 Data Differencing Started...\n")
+cat("🔄 Seasonal Differencing (D=1, s=12) using Box-Cox data...\n")
 
-# Load required libraries
-library(tseries)
-library(urca)
-library(forecast)
-library(ggplot2)
-library(tidyr)
-library(dplyr)
+# ----------------------------------------------------------------------------
+# 1️⃣ Libraries
+# ----------------------------------------------------------------------------
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(tidyr)
+  library(dplyr)
+})
 
-# Load stationarity test results
-load("output/02_stationarity_results.RData")
-cat("📊 Data loaded: stationarity_results and rainfall_matrix\n")
+# ----------------------------------------------------------------------------
+# 2️⃣ Load Box-Cox Data (TRAIN)
+# ----------------------------------------------------------------------------
+# Diharapkan file ini memuat: final_data (hasil Box-Cox untuk TRAIN),
+# train_data (asli), train_time (tanggal TRAIN), dst.
+load("output/02c_boxcox_data.RData")  
+cat("📦 Loaded 02c_boxcox_data.RData\n")
 
-# Simple stationarity test function (same as in 02_Stationarity_Test.R)
-test_stationarity <- function(ts_data) {
-  adf_test <- adf.test(ts_data, alternative = "stationary")
-  return(list(
-    statistic = adf_test$statistic,
-    p_value = adf_test$p.value,
-    is_stationary = adf_test$p.value < 0.05
-  ))
+# Pilih sumber data untuk differencing:
+# - Gunakan final_data (hasil Box-Cox) jika tersedia
+# - Jika tidak ada, fallback ke train_data
+if (exists("final_data") && is.matrix(final_data)) {
+  source_matrix <- final_data
+  cat("✅ Using Box-Cox transformed TRAIN data (final_data)\n")
+} else if (exists("train_data") && is.matrix(train_data)) {
+  source_matrix <- train_data
+  cat("ℹ️ final_data not found — using raw TRAIN data (train_data)\n")
+} else {
+  stop("❌ Neither 'final_data' nor 'train_data' is available in 02c_boxcox_data.RData")
 }
 
-# Initialize differencing results
-regions <- colnames(rainfall_matrix)
-n_regions <- length(regions)
-
-differencing_results <- data.frame(
-  Region = regions,
-  Original_Stationary = stationarity_results$Overall_Stationary,
-  Integration_Order = numeric(n_regions),
-  Final_Stationary = logical(n_regions),
-  Differencing_Applied = character(n_regions),
-  stringsAsFactors = FALSE
-)
-
-# Store differenced data
-differenced_data <- list()
-integration_order <- numeric(n_regions)
-names(integration_order) <- regions
-
-cat("\n🔄 Applying Differencing Process:\n")
-cat(paste(rep("=", 50), collapse = ""), "\n")
-
-for (i in 1:n_regions) {
-  region <- regions[i]
-  ts_data <- rainfall_matrix[, i]
-  
-  cat("\n📍 Processing", region, "region:\n")
-  
-  if (stationarity_results$Overall_Stationary[i]) {
-    # Already stationary
-    differenced_data[[region]] <- ts_data
-    integration_order[i] <- 0
-    differencing_results$Integration_Order[i] <- 0
-    differencing_results$Final_Stationary[i] <- TRUE
-    differencing_results$Differencing_Applied[i] <- "None (already stationary)"
-    
-    cat("  ✅ Already stationary, no differencing needed\n")
-    cat("  📊 Integration order (d):", 0, "\n")
-    
-  } else {
-    # Need differencing
-    cat("  🔄 Applying differencing...\n")
-    
-    current_data <- ts_data
-    d_order <- 0
-    max_diff <- 2  # Maximum differencing order
-    
-    # Apply differencing until stationary or max order reached
-    while (d_order < max_diff) {
-      d_order <- d_order + 1
-      current_data <- diff(current_data)
-      
-      cat("    Testing after", d_order, "differencing...\n")
-      
-      # Test stationarity with ADF
-      adf_result <- test_stationarity(current_data)
-      
-      cat("    ADF p-value:", round(adf_result$p_value, 4), "\n")
-      
-      if (adf_result$is_stationary) {
-        cat("    ✅ Achieved stationarity after", d_order, "differencing\n")
-        break
-      } else {
-        cat("    ❌ Still non-stationary, trying higher order...\n")
-      }
-    }
-    
-    # Store results
-    differenced_data[[region]] <- current_data
-    integration_order[i] <- d_order
-    differencing_results$Integration_Order[i] <- d_order
-    differencing_results$Final_Stationary[i] <- d_order <= max_diff
-    
-    if (d_order == 1) {
-      differencing_results$Differencing_Applied[i] <- "First difference"
-    } else if (d_order == 2) {
-      differencing_results$Differencing_Applied[i] <- "Second difference"
-    } else {
-      differencing_results$Differencing_Applied[i] <- paste(d_order, "differences")
-    }
-    
-    cat("  📊 Final integration order (d):", d_order, "\n")
-    
-    if (d_order > max_diff) {
-      cat("  ⚠️ Warning: Maximum differencing reached, may need alternative approach\n")
-    }
-  }
+# Tanggal TRAIN (opsional, untuk plotting)
+if (exists("train_time")) {
+  train_dates <- as.Date(train_time)
+  cat("🗓️ Train date range:", as.character(min(train_dates)), "→", as.character(max(train_dates)), "\n")
+} else {
+  train_dates <- NULL
+  cat("⚠️ 'train_time' not found — plots will use index instead of dates.\n")
 }
 
-cat("\n", paste(rep("=", 50), collapse = ""), "\n")
-cat("📋 DIFFERENCING RESULTS SUMMARY:\n")
-cat(paste(rep("=", 50), collapse = ""), "\n")
+regions    <- colnames(source_matrix)
+n_regions  <- length(regions)
+n_obs      <- nrow(source_matrix)
 
-# Display results table
-print(differencing_results)
+cat("📊 Data dims (TRAIN after Box-Cox / source):", n_obs, "×", n_regions, "\n\n")
 
-# Create differenced matrix (handle different lengths due to differencing)
-cat("\n🔧 Creating Differenced Data Matrix:\n")
+# ----------------------------------------------------------------------------
+# 3️⃣ Seasonal Differencing Parameters
+# ----------------------------------------------------------------------------
+D_order  <- 1   # seasonal difference order
+s_period <- 12  # monthly seasonality
+cat("📋 Seasonal Differencing Parameters: D =", D_order, "| s =", s_period, "\n\n")
 
-# Find minimum length after differencing
-min_length <- min(sapply(differenced_data, length))
-cat("Minimum length after differencing:", min_length, "\n")
+# ----------------------------------------------------------------------------
+# 4️⃣ Apply Seasonal Differencing (D=1, s=12)
+# ----------------------------------------------------------------------------
+cat("🔁 Applying seasonal differencing to each region...\n")
 
-# Create matrix with equal lengths
-differenced_matrix <- matrix(NA, nrow = min_length, ncol = n_regions)
+differenced_list <- vector("list", n_regions)
+names(differenced_list) <- regions
+
+for (r in regions) {
+  # diff(x, lag = s, differences = D)
+  differenced_list[[r]] <- diff(source_matrix[, r], lag = s_period, differences = D_order)
+}
+
+# Ukuran “kerugian” observasi karena seasonal differencing
+lost <- D_order * s_period
+cat("ℹ️ Observations lost due to seasonal differencing:", lost, "\n")
+
+# ----------------------------------------------------------------------------
+# 5️⃣ Build Differenced Matrix (equal lengths)
+# ----------------------------------------------------------------------------
+min_length <- min(sapply(differenced_list, length))
+differenced_matrix <- matrix(NA_real_, nrow = min_length, ncol = n_regions)
 colnames(differenced_matrix) <- regions
 
-for (i in 1:n_regions) {
-  region <- regions[i]
-  data_length <- length(differenced_data[[region]])
-  # Take the last min_length observations
-  start_idx <- data_length - min_length + 1
-  differenced_matrix[, i] <- differenced_data[[region]][start_idx:data_length]
-}
-
-cat("Differenced matrix dimensions:", nrow(differenced_matrix), "x", ncol(differenced_matrix), "\n")
-
-# Integration order summary
-cat("\n📊 Integration Order Summary:\n")
-cat("Integration order vector [d1, d2, d3, d4, d5]:", integration_order, "\n")
-
-stationary_after_diff <- sum(differencing_results$Final_Stationary)
-cat("✅ Stationary regions after differencing:", stationary_after_diff, "out of", n_regions, "\n")
-
-if (stationary_after_diff == n_regions) {
-  cat("🎉 All regions achieved stationarity!\n")
-  cat("🔄 Next step: Data centering with stcenter()\n")
-} else {
-  non_stationary <- regions[!differencing_results$Final_Stationary]
-  cat("⚠️ Still non-stationary regions:", paste(non_stationary, collapse = ", "), "\n")
-  cat("🔄 Consider alternative approaches for these regions\n")
-}
-
-# Adjust dates for differenced data
-if (exists("dates")) {
-  # Calculate how many observations were lost due to differencing
-  max_diff_order <- max(integration_order)
-  if (max_diff_order > 0) {
-    differenced_dates <- dates[(max_diff_order + 1):length(dates)]
-    # Adjust to match matrix length
-    date_length <- length(differenced_dates)
-    start_idx <- date_length - min_length + 1
-    differenced_dates <- differenced_dates[start_idx:date_length]
+for (i in seq_along(regions)) {
+  x <- differenced_list[[ regions[i] ]]
+  if (length(x) >= min_length) {
+    differenced_matrix[, i] <- tail(x, min_length)
   } else {
-    differenced_dates <- dates
+    # (Jarang terjadi) jika ada yang lebih pendek — pad tail
+    pad <- min_length - length(x)
+    differenced_matrix[, i] <- c(rep(NA_real_, pad), x)
   }
-  
-  cat("Date range after differencing:", as.character(min(as.Date(differenced_dates))), 
-      "to", as.character(max(as.Date(differenced_dates))), "\n")
-} else {
-  differenced_dates <- NULL
 }
 
-# ============================================================================
-# VISUALIZATION: Time Series Plot After Differencing
-# ============================================================================
-
-cat("\n📈 Creating Time Series Plot After Differencing...\n")
-
-library(ggplot2)
-library(tidyr)
-library(dplyr)
-
-# Prepare data for plotting
-if (!is.null(differenced_dates)) {
-  plot_data <- data.frame(
-    Date = as.Date(differenced_dates),
-    differenced_matrix
-  )
+# Buat vektor tanggal untuk hasil differencing (jika train_dates ada)
+if (!is.null(train_dates)) {
+  # Seasonal differencing menggeser mulai sebanyak 'lost' observasi
+  diff_dates_full <- train_dates[(lost + 1):length(train_dates)]
+  # Selaraskan panjang dengan min_length (take tail)
+  diff_dates <- tail(diff_dates_full, min_length)
+  cat("📅 Differenced TRAIN date range:", as.character(min(diff_dates)), "→", as.character(max(diff_dates)), "\n")
 } else {
-  # Create time index if dates not available
-  plot_data <- data.frame(
-    Date = 1:nrow(differenced_matrix),
-    differenced_matrix
-  )
+  diff_dates <- NULL
 }
 
-# Reshape for ggplot
-plot_data_long <- plot_data %>%
-  pivot_longer(cols = -Date, names_to = "Region", values_to = "Differenced_Rainfall")
+# ----------------------------------------------------------------------------
+# 6️⃣ integration_order (menjaga kompatibilitas pipeline)
+# ----------------------------------------------------------------------------
+# Banyak skrip downstream memeriksa integration_order sebagai SCALAR (length==1).
+# Di sini kita simpan sebagai 1 (D=1) agar bisa dibaca sebagai d_order/deteksi differencing.
+integration_order <- 1
 
-# Time series plot
-p_diff <- ggplot(plot_data_long, aes(x = Date, y = Differenced_Rainfall, color = Region)) +
-  geom_line(size = 0.8) +
-  labs(title = "Differenced Rainfall Time Series by Region",
-       x = "Date", y = "Differenced Rainfall",
-       subtitle = paste("After differencing for stationarity (", nrow(differenced_matrix), " observations)")) +
+cat("\n✅ Seasonal differencing completed.\n")
+cat("- Differenced matrix dims:", nrow(differenced_matrix), "×", ncol(differenced_matrix), "\n")
+cat("- integration_order (scalar):", integration_order, "\n\n")
+
+# ----------------------------------------------------------------------------
+# 7️⃣ Visualization (faceted per region)
+# ----------------------------------------------------------------------------
+if (!dir.exists("plots")) dir.create("plots", recursive = TRUE)
+
+plot_df <- data.frame(
+  Index = seq_len(nrow(differenced_matrix)),
+  differenced_matrix
+)
+
+if (!is.null(diff_dates)) {
+  plot_df$Date <- diff_dates
+  x_var <- "Date"
+} else {
+  x_var <- "Index"
+}
+
+plot_long <- plot_df |>
+  pivot_longer(cols = all_of(regions), names_to = "Region", values_to = "Value")
+
+p <- ggplot(plot_long, aes_string(x = x_var, y = "Value", color = "Region")) +
+  geom_line(linewidth = 0.8, alpha = 0.9) +
+  labs(
+    title = "Seasonally Differenced Rainfall (TRAIN, D=1, s=12)",
+    subtitle = paste0("Source: ", if (exists("final_data")) "Box-Cox (final_data)" else "train_data",
+                      " | Obs: ", nrow(differenced_matrix)),
+    x = if (!is.null(diff_dates)) "Date" else "Index",
+    y = "Differenced Value"
+  ) +
   theme_minimal() +
   theme(legend.position = "bottom") +
   facet_wrap(~Region, scales = "free_y", ncol = 2)
 
-if (!is.null(differenced_dates)) {
-  p_diff <- p_diff + scale_x_date(date_breaks = "1 year", date_labels = "%Y")
+if (!is.null(diff_dates)) {
+  p <- p + scale_x_date(date_breaks = "1 year", date_labels = "%Y")
 }
 
-print(p_diff)
-ggsave("plots/03_differenced_timeseries.png", p_diff, width = 12, height = 8, dpi = 300)
-cat("✅ Differenced time series plot saved: plots/03_differenced_timeseries.png\n")
+ggsave("plots/03_differenced_train_D1S12_boxcox.png", p, width = 12, height = 8, dpi = 300)
+print(p)
+cat("📈 Saved plot: plots/03_differenced_train_D1S12_boxcox.png\n")
 
-# Save results
-save(differenced_matrix, integration_order, differencing_results, 
-     differenced_dates, coordinates,
-     file = "output/03_differencing_results.RData")
+# ----------------------------------------------------------------------------
+# 8️⃣ Save Results (sama seperti sebelumnya untuk kompatibilitas)
+# ----------------------------------------------------------------------------
+if (!dir.exists("output")) dir.create("output", recursive = TRUE)
 
-cat("\n💾 Results saved to: output/03_differencing_results.RData\n")
-cat("✅ Differencing process completed!\n")
-cat(paste(rep("=", 50), collapse = ""), "\n")
+save(
+  differenced_matrix,   # matriks hasil seasonal differencing (TRAIN)
+  integration_order,    # scalar = 1 (untuk mendeteksi ada differencing)
+  diff_dates,           # tanggal TRAIN sesudah differencing (atau NULL)
+  file = "output/03_differencing_results.RData"
+)
+
+cat("\n💾 Saved to: output/03_differencing_results.RData\n")
+cat("🎯 Done: Seasonal differencing after Box-Cox (D=1, s=12) on TRAIN data.\n")
+cat(paste(rep("=", 60), collapse = ""), "\n")

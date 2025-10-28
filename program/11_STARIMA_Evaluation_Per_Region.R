@@ -23,10 +23,10 @@ for (pkg in required_packages) {
 # LOAD DATA
 # ============================================================================
 load("output/10a_starima_uniform.RData")  # Model & residuals
-load("output/06_data_split.RData")        # train_data, test_data
+load("output/04_centered_data.RData")        # centered_matrix, test_data
 
 cat("📦 Loaded model and data successfully.\n")
-cat("- Training data dimensions:", dim(train_data), "\n\n")
+cat("- Training data dimensions:", dim(centered_matrix), "\n\n")
 
 # ============================================================================
 # FITTED VALUES HANDLING (AUTO-DETECTION)
@@ -44,13 +44,13 @@ fitted_values <- tryCatch({
   if (is.null(resid_uniform)) stop("Residuals not found in model object.")
   
   # Ensure same dimension with training data
-  if (nrow(resid_uniform) != nrow(train_data)) {
-    min_len <- min(nrow(resid_uniform), nrow(train_data))
+  if (nrow(resid_uniform) != nrow(centered_matrix)) {
+    min_len <- min(nrow(resid_uniform), nrow(centered_matrix))
     resid_uniform <- resid_uniform[1:min_len, , drop = FALSE]
-    train_data <- train_data[1:min_len, , drop = FALSE]
+    centered_matrix <- centered_matrix[1:min_len, , drop = FALSE]
   }
   
-  fitted_manual <- train_data - resid_uniform
+  fitted_manual <- centered_matrix - resid_uniform
   cat("✅ Fitted values reconstructed manually.\n")
   fitted_manual
 })
@@ -61,8 +61,8 @@ if (inherits(fitted_values, "ts")) fitted_values <- as.matrix(fitted_values)
 fitted_values <- apply(fitted_values, 2, as.numeric)
 
 # Sync columns
-colnames(fitted_values) <- colnames(train_data)
-regions <- colnames(train_data)
+colnames(fitted_values) <- colnames(centered_matrix)
+regions <- colnames(centered_matrix)
 
 cat("📊 Fitted values ready. Dimensions:", dim(fitted_values), "\n\n")
 
@@ -80,7 +80,7 @@ region_metrics <- data.frame(
 cat("⚙️ Calculating accuracy metrics per region...\n")
 
 for (r in regions) {
-  y_true <- train_data[, r]
+  y_true <- centered_matrix[, r]
   y_pred <- fitted_values[, r]
   
   # Skip region if all NA

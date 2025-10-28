@@ -7,7 +7,7 @@
 # ============================================================================
 
 # Load required data
-load("output/09_model_structure.RData")
+load("output/09_model_structure_all_weights.RData")
 load("output/05_spatial_weights.RData")
 load("output/06_data_split.RData")
 

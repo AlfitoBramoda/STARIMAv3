@@ -7,12 +7,12 @@
 # ============================================================================
 
 # Load required data
-load("output/09_model_structure.RData")
+load("output/09_model_structure_all_weights.RData")
 load("output/05_spatial_weights.RData")
 load("output/06_data_split.RData")
 
 cat("=== STARIMA ESTIMATION - UNIFORM WEIGHTS ===\n")
-cat("Estimating STARIMA(1,0,2) model using uniform spatial weights...\n\n")
+#cat("Estimating STARIMA(1,0,2) model using uniform spatial weights...\n\n")
 
 # ============================================================================
 # ESTIMATION SETUP
@@ -196,6 +196,10 @@ residual_stats <- data.frame(
 
 print(residual_stats)
 
+
+
+
+
 # ============================================================================
 # VISUALIZATION
 # ============================================================================
@@ -322,6 +326,6 @@ cat("- Parameter significance: ✅\n")
 cat("- Residual analysis: ✅\n")
 cat("- Ready for diagnostic: ✅\n")
 
-cat("\n🎉 STARIMA(1,0,2) uniform weights model successfully estimated!\n")
+cat("\n🎉 STARIMA uniform weights model successfully estimated!\n")
 cat("Estimation time:", round(as.numeric(estimation_time), 2), "seconds\n")
 cat("Model fit: AIC =", round(aic, 2), ", BIC =", round(bic, 2), "\n")
