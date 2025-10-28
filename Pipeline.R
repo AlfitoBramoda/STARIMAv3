@@ -10,6 +10,8 @@ source("program/02_Stationarity_Test.R")
 
 source("program/02b_Data Split.R")
 
+source("program/02c_Boxcox Transformasi.R")
+
 source("program/03_Differencing.R")
 
 source("program/04_Data_Centering.R")

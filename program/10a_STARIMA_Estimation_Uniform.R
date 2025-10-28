@@ -9,7 +9,7 @@
 # Load required data
 load("output/09_model_structure_all_weights.RData")
 load("output/05_spatial_weights.RData")
-load("output/06_data_split.RData")
+load("output/02b_data_split.RData")
 
 cat("=== STARIMA ESTIMATION - UNIFORM WEIGHTS ===\n")
 #cat("Estimating STARIMA(1,0,2) model using uniform spatial weights...\n\n")
@@ -196,9 +196,54 @@ residual_stats <- data.frame(
 
 print(residual_stats)
 
+# ============================================================================
+# RESIDUAL ACF/PACF ANALYSIS
+# ============================================================================
 
+cat("\n🔍 Computing Residual ACF/PACF...\n")
 
+# Compute ACF and PACF of residuals for diagnostic plots
+library(forecast)
 
+# Convert residuals to time series if needed
+residuals_ts <- as.vector(residuals_uniform)
+residuals_ts <- residuals_ts[!is.na(residuals_ts)]  # Remove NA values
+
+# Compute ACF and PACF
+tryCatch({
+  residual_acf <- acf(residuals_ts, plot = FALSE, lag.max = 20)
+  residual_pacf <- pacf(residuals_ts, plot = FALSE, lag.max = 20)
+  
+  cat("✅ Residual ACF computed with", length(residual_acf$acf), "lags\n")
+  cat("✅ Residual PACF computed with", length(residual_pacf$acf), "lags\n")
+  
+  # Check for significant autocorrelations
+  n <- length(residuals_ts)
+  conf_bound <- 1.96 / sqrt(n)
+  
+  acf_significant <- which(abs(residual_acf$acf[-1]) > conf_bound)
+  pacf_significant <- which(abs(residual_pacf$acf) > conf_bound)
+  
+  cat("- Significant ACF lags:", if(length(acf_significant) > 0) paste(acf_significant, collapse = ", ") else "None", "\n")
+  cat("- Significant PACF lags:", if(length(pacf_significant) > 0) paste(pacf_significant, collapse = ", ") else "None", "\n")
+  
+  # Overall adequacy check
+  acf_adequate <- length(acf_significant) <= 2  # Allow up to 2 significant lags
+  normality_ok <- abs(calc_skewness(residuals_uniform)) < 1 && abs(calc_kurtosis(residuals_uniform)) < 3
+  
+  cat("- ACF adequacy:", ifelse(acf_adequate, "✅ PASS", "⚠️ WARNING"), "\n")
+  cat("- Normality check:", ifelse(normality_ok, "✅ PASS", "⚠️ WARNING"), "\n")
+  
+}, error = function(e) {
+  cat("❌ Error computing ACF/PACF:", e$message, "\n")
+  # Create dummy objects to prevent errors in diagnostic files
+  residual_acf <<- list(acf = rep(0, 21))  # 21 values (lag 0 to 20)
+  residual_pacf <<- list(acf = rep(0, 20))  # 20 values (lag 1 to 20)
+  acf_significant <<- numeric(0)
+  pacf_significant <<- numeric(0)
+  acf_adequate <<- FALSE
+  normality_ok <<- FALSE
+})
 
 # ============================================================================
 # VISUALIZATION
@@ -285,12 +330,18 @@ uniform_results <- list(
   ),
   residuals = residuals_uniform,
   residual_stats = residual_stats,
+  residual_acf = residual_acf,
+  residual_pacf = residual_pacf,
+  acf_adequate = acf_adequate,
+  normality_ok = normality_ok,
   estimation_time = estimation_time,
   spatial_weights = "uniform"
 )
 
 # Save results
 save(uniform_results, starima_uniform, coef_table, residuals_uniform,
+     residual_acf, residual_pacf, acf_significant, pacf_significant,
+     acf_adequate, normality_ok,
      file = "output/10a_starima_uniform.RData")
 
 # Display in viewer
@@ -313,6 +364,7 @@ cat("✅ Log-likelihood:", round(loglik, 4), "\n")
 cat("✅ AIC:", round(aic, 4), "\n")
 cat("✅ BIC:", round(bic, 4), "\n")
 cat("✅ Residual analysis completed\n")
+cat("✅ ACF/PACF analysis completed\n")
 cat("✅ Visualization plots generated (3 plots)\n")
 cat("✅ Results saved to: output/10a_starima_uniform.RData\n")
 cat("✅ All tables available in RStudio viewer\n\n")

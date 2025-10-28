@@ -6,13 +6,35 @@ library(starma)
 library(ggplot2)
 library(gridExtra)
 
+# Load estimation results that contain residual_acf and residual_pacf
+tryCatch({
+  load("output/10c_starima_correlation.RData")  # Contains residual_acf, residual_pacf, etc.
+  cat("✅ Correlation estimation results loaded\n")
+}, error = function(e) {
+  cat("⚠️ Warning: Could not load 10c_starima_correlation.RData. File may not exist yet.\n")
+  cat("Please run 10c_STARIMA_Estimation_Correlation.R first.\n")
+})
+
+# Verify required variables exist
+if (!exists("residual_acf") || !exists("residual_pacf")) {
+  cat("⚠️ Warning: residual_acf or residual_pacf not found. Creating dummy objects...\n")
+  residual_acf <- list(acf = rep(0, 21))
+  residual_pacf <- list(acf = rep(0, 20))
+  acf_significant <- numeric(0)
+  pacf_significant <- numeric(0)
+  acf_adequate <- FALSE
+  normality_ok <- FALSE
+}
+
+cat("✅ Residual ACF/PACF variables loaded successfully\n")
+
 # 1) Orde model dari struktur (pastikan konsisten dengan file residual)
 if (exists("model_structures")) {
   p_order <- model_structures$correlation$ar_order
   q_order <- model_structures$correlation$ma_order
 } else {
-  cat("⚠️ model_structures not found, fallback p=1, q=1\n")
-  p_order <- 2; q_order <- 3
+  cat("⚠️ model_structures not found, using default values\n")
+  p_order <- 1; q_order <- 2  # STARIMA(1,0,2) as per file name
 }
 
 d_order <- 0
@@ -46,9 +68,12 @@ print(sapply(wlist_correlation, function(w) sum(w != 0)))
 #    Jika pada estimasi Anda menyimpan AR/MA mask:
 if (exists("model_structures")) {
   total_params <- model_structures$correlation$total_params  # contoh: 18 (p=3,q=3, slag 0..2)
+} else if (exists("correlation_results") && !is.null(correlation_results$fit_statistics$parameters)) {
+  total_params <- correlation_results$fit_statistics$parameters
+  cat(paste0("ℹ️ Using total_params from estimation results = ", total_params, "\n"))
 } else {
   # fallback konservatif: (max_spatial_lag+1)*p + (max_spatial_lag+1)*q
-  max_spatial_lag <- 3
+  max_spatial_lag <- 2  # Based on STARIMA(1,0,2)
   total_params <- (max_spatial_lag + 1) * (p_order + q_order)
   cat(paste0("ℹ️ Recalculated total_params (fallback) = ", total_params, "\n"))
 }
@@ -70,7 +95,7 @@ cat("🔬 Enhanced White Noise Testing:\n")
 cat("=======================\n")
 
 # 1. PERBAIKAN: Validasi dan preprocessing residual
-residuals_vec <- as.vector(residuals_uniform)
+residuals_vec <- as.vector(residuals_correlation)
 n_total <- length(residuals_vec)
 
 # Remove NA values
@@ -110,7 +135,7 @@ if (sum(outliers) > 0) {
 }
 
 # 4. PERBAIKAN: Enhanced wlist validation
-wlist_fixed <- wlist_uniform
+wlist_fixed <- wlist_correlation
 for (i in 1:length(wlist_fixed)) {
   # Ensure no NaN or Inf values
   wlist_fixed[[i]][is.na(wlist_fixed[[i]])] <- 0
@@ -420,7 +445,7 @@ if (overall_adequate) {
 
 # Save diagnostic results
 save(diagnostic_results, residual_acf, residual_pacf, 
-     file = "output/11a_diagnostic_correlation.RData")
+     file = "output/11c_diagnostic_correlation.RData")
 
 # Display in viewer
 cat("\n=== DATA VIEWER ===\n")

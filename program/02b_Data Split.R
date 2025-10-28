@@ -178,7 +178,7 @@ print(p4)
 # Save split data
 save(train_data, test_data, train_time, test_time, 
      train_summary, test_summary,
-     file = "output/02_data_split.RData")
+     file = "output/02b_data_split.RData")
 
 # Display data in viewer
 cat("=== DATA VIEWER ===\n")

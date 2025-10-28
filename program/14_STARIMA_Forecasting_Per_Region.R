@@ -1,12 +1,12 @@
 # ============================================================================
-# STARIMA Forecasting Pipeline - Phase 5: Forecasting + Evaluation (FIXED)
-# File   : 14_STARIMA_Forecasting_Per_Region_Fixed.R
+# STARIMA Forecasting Pipeline - Phase 5: Forecasting + Evaluation
+# File: 14_STARIMA_Forecasting_Per_Region.R
 # Purpose: Forecast curah hujan 2024 dengan model STARIMA + evaluasi per wilayah
-# Author : STARMA Analysis
-# Date   : 2024
+# Author: STARMA Analysis
+# Date: 2024
 # ============================================================================
 
-cat("=== PHASE 5: STARIMA FORECASTING & EVALUATION (FIXED) ===\n\n")
+cat("=== PHASE 5: STARIMA FORECASTING & EVALUATION ===\n\n")
 
 # ----------------------------------------------------------------------------
 # 0) Dependencies
@@ -27,9 +27,9 @@ cat("Loading data files...\n")
 # Check if files exist
 required_files <- c(
   "output/10a_starima_uniform.RData",
-  "output/06_data_split.RData", 
+  "output/02b_data_split.RData", 
   "output/05_spatial_weights.RData",
-  "output/09_model_structure.RData"
+  "output/09_model_structure_all_weights.RData"
 )
 
 for (file in required_files) {
@@ -39,9 +39,9 @@ for (file in required_files) {
 }
 
 load("output/10a_starima_uniform.RData")   # berisi: starima_uniform, uniform_results
-load("output/06_data_split.RData")         # train_data, test_data, train_time, test_time
+load("output/02b_data_split.RData")         # train_data, test_data, train_time, test_time
 load("output/05_spatial_weights.RData")    # spatial_weights
-load("output/09_model_structure.RData")    # p_order, d_order, q_order
+load("output/09_model_structure_all_weights.RData")    # p_order, d_order, q_order
 
 cat("Artifacts loaded successfully.\n")
 cat("- p,d,q = ", p_order,",", d_order,",", q_order, "\n", sep="")
@@ -55,10 +55,6 @@ cat("\n🔍 Validating STARIMA model data...\n")
 if (!exists("starima_uniform")) {
   stop("❌ starima_uniform object not found in loaded data")
 }
-
-# Print structure for debugging
-cat("STARIMA model structure:\n")
-str(starima_uniform)
 
 # Fix data structure with comprehensive error handling
 if (is.null(starima_uniform$data)) {
@@ -178,72 +174,6 @@ for (t in 1:h) {
 
 cat("✅ Stable forecasting completed successfully\n")
 
-# ----------------------------------------------------------------------------
-# 4B) Inverse Transformations (Centering → Differencing → Box-Cox)
-# ----------------------------------------------------------------------------
-cat("\n🔄 Performing inverse transformations (Centering → Differencing → Box-Cox)...\n")
-
-# Load required transformation parameters
-trans_files <- c("output/04_data_centering.RData",
-                 "output/05_differencing_results.RData",
-                 "output/03_boxcox_data.RData")
-
-for (f in trans_files) {
-  if (file.exists(f)) load(f)
-}
-
-# 1️⃣ Inverse Centering
-if (exists("centering_params")) {
-  cat("🎯 Restoring centering (mean & sd per region)...\n")
-  forecast_center_inv <- matrix(NA, nrow=nrow(forecast_matrix), ncol=ncol(forecast_matrix))
-  colnames(forecast_center_inv) <- colnames(forecast_matrix)
-  
-  for (r in colnames(forecast_matrix)) {
-    mu <- centering_params$mean[r]
-    sigma <- centering_params$sd[r]
-    forecast_center_inv[, r] <- (forecast_matrix[, r] * sigma) + mu
-  }
-} else {
-  cat("⚠️ Centering parameters not found, skipping inverse centering.\n")
-  forecast_center_inv <- forecast_matrix
-}
-
-# 2️⃣ Inverse Differencing
-if (exists("differenced_matrix")) {
-  cat("📉 Reverting differencing...\n")
-  last_train <- tail(train_data, 1)
-  
-  forecast_diff_inv <- matrix(NA, nrow=nrow(forecast_center_inv), ncol=ncol(forecast_center_inv))
-  colnames(forecast_diff_inv) <- colnames(forecast_center_inv)
-  
-  for (j in 1:ncol(forecast_center_inv)) {
-    prev <- last_train[1, j]
-    for (t in 1:nrow(forecast_center_inv)) {
-      prev <- prev + forecast_center_inv[t, j]
-      forecast_diff_inv[t, j] <- prev
-    }
-  }
-} else {
-  cat("⚠️ No differencing applied previously, skipping inverse differencing.\n")
-  forecast_diff_inv <- forecast_center_inv
-}
-
-# 3️⃣ Inverse Box-Cox
-inv_boxcox <- function(y, lambda) {
-  if (lambda == 0) return(exp(y))
-  else return(((y * lambda) + 1)^(1 / lambda))
-}
-
-if (exists("lambda_overall")) {
-  cat("📦 Applying inverse Box-Cox (λ =", round(lambda_overall, 3), ")...\n")
-  forecast_final <- apply(forecast_diff_inv, 2, inv_boxcox, lambda=lambda_overall)
-} else {
-  cat("⚠️ Box-Cox parameter not found, skipping inverse Box-Cox.\n")
-  forecast_final <- forecast_diff_inv
-}
-
-cat("✅ Inverse transformations completed successfully.\n")
-
 # Debug: Print forecast summary
 cat("\n🔍 Forecast Summary:\n")
 cat("Forecast range: ", round(range(forecast_final, na.rm=TRUE), 4), "\n")
@@ -349,8 +279,8 @@ p_rmse <- ggplot(region_eval, aes(x = Region, y = RMSE, fill = Region)) +
   theme_minimal() +
   theme(legend.position = "none",
         plot.title = element_text(hjust = .5))
-# ggsave("plots/14_starima_forecast_rmse.png", p_rmse, width = 8, height = 5, dpi = 300)
-# print(p_rmse)
+ggsave("plots/14_starima_forecast_rmse.png", p_rmse, width = 8, height = 5, dpi = 300)
+print(p_rmse)
 
 # ----------------------------------------------------------------------------
 # 8) Save Results

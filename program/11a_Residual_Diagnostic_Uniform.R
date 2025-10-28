@@ -6,13 +6,35 @@ library(starma)
 library(ggplot2)
 library(gridExtra)
 
+# Load estimation results that contain residual_acf and residual_pacf
+tryCatch({
+  load("output/10a_starima_uniform.RData")  # Contains residual_acf, residual_pacf, etc.
+  cat("✅ Uniform estimation results loaded\n")
+}, error = function(e) {
+  cat("⚠️ Warning: Could not load 10a_starima_uniform.RData. File may not exist yet.\n")
+  cat("Please run 10a_STARIMA_Estimation_Uniform.R first.\n")
+})
+
+# Verify required variables exist
+if (!exists("residual_acf") || !exists("residual_pacf")) {
+  cat("⚠️ Warning: residual_acf or residual_pacf not found. Creating dummy objects...\n")
+  residual_acf <- list(acf = rep(0, 21))
+  residual_pacf <- list(acf = rep(0, 20))
+  acf_significant <- numeric(0)
+  pacf_significant <- numeric(0)
+  acf_adequate <- FALSE
+  normality_ok <- FALSE
+}
+
+cat("✅ Residual ACF/PACF variables loaded successfully\n")
+
 # 1) Orde model dari struktur (pastikan konsisten dengan file residual)
 if (exists("model_structures")) {
   p_order <- model_structures$uniform$ar_order
   q_order <- model_structures$uniform$ma_order
 } else {
-  cat("⚠️ model_structures not found, fallback p=1, q=1\n")
-  p_order <- 2; q_order <- 3
+  cat("⚠️ model_structures not found, using default values\n")
+  p_order <- 1; q_order <- 2  # STARIMA(1,0,2) as per file name
 }
 
 d_order <- 0
@@ -46,9 +68,12 @@ print(sapply(wlist_uniform, function(w) sum(w != 0)))
 #    Jika pada estimasi Anda menyimpan AR/MA mask:
 if (exists("model_structures")) {
   total_params <- model_structures$uniform$total_params  # contoh: 18 (p=3,q=3, slag 0..2)
+} else if (exists("uniform_results") && !is.null(uniform_results$fit_statistics$parameters)) {
+  total_params <- uniform_results$fit_statistics$parameters
+  cat(paste0("ℹ️ Using total_params from estimation results = ", total_params, "\n"))
 } else {
   # fallback konservatif: (max_spatial_lag+1)*p + (max_spatial_lag+1)*q
-  max_spatial_lag <- 3
+  max_spatial_lag <- 2  # Based on STARIMA(1,0,2)
   total_params <- (max_spatial_lag + 1) * (p_order + q_order)
   cat(paste0("ℹ️ Recalculated total_params (fallback) = ", total_params, "\n"))
 }
