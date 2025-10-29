@@ -22,9 +22,9 @@ cat("📋 Estimation Setup:\n")
 cat("===================\n")
 cat("- Model: STARIMA(", p_order, ",", d_order, ",", q_order, ")\n")
 cat("- Spatial weights: Uniform\n")
-cat("- Training data: 108 observations\n")
+cat("- Training data: 96 observations (after seasonal differencing D=1, s=12)\n")
 cat("- Parameters to estimate:", total_params, "\n")
-cat("- Degrees of freedom:", 108 - total_params, "\n\n")
+cat("- Degrees of freedom:", 96 - total_params, "\n\n")
 
 # Prepare data and weights (train_data already loaded from 06_data_split.RData)
 # Convert spatial weights to proper wlist format for starma function
@@ -142,11 +142,12 @@ loglik <- ifelse(is.null(starima_uniform$loglik), NA, starima_uniform$loglik)
 aic <- ifelse(is.null(starima_uniform$aic), NA, starima_uniform$aic)
 bic <- ifelse(is.null(starima_uniform$bic), NA, starima_uniform$bic)
 
-# Calculate AIC/BIC if not available
+# Calculate AIC/BIC if not available (using correct observations count = 96)
 if (is.na(aic) && !is.na(loglik)) {
   n_params <- nrow(summary_coef)
+  n_obs <- 96  # Correct observations after seasonal differencing
   aic <- -2 * loglik + 2 * n_params
-  bic <- -2 * loglik + log(nrow(train_data)) * n_params
+  bic <- -2 * loglik + log(n_obs) * n_params
 }
 
 cat("\n📈 Model Fit Statistics:\n")
@@ -154,7 +155,7 @@ cat("- Log-likelihood:", round(loglik, 4), "\n")
 cat("- AIC:", round(aic, 4), "\n")
 cat("- BIC:", round(bic, 4), "\n")
 cat("- Parameters:", total_params, "\n")
-cat("- Observations:", nrow(train_data), "\n\n")
+cat("- Observations:", 96, "(after seasonal differencing)\n\n")
 
 # ============================================================================
 # RESIDUAL ANALYSIS
@@ -408,7 +409,7 @@ uniform_results <- list(
     aic = aic,
     bic = bic,
     parameters = total_params,
-    observations = nrow(train_data)
+    observations = 96  # Correct count after seasonal differencing
   ),
   residuals = residuals_uniform,
   residual_stats = residual_stats,

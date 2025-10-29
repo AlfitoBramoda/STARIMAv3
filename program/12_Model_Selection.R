@@ -29,6 +29,7 @@ cat("📋 Model Selection Setup:\n")
 cat("=========================\n")
 cat("- Models to compare: 3 STARIMA(1,0,2) models\n")
 cat("- Spatial weights: Uniform, Distance, Correlation\n")
+cat("- Observations: 96 (after seasonal differencing D=1, s=12)\n")
 cat("- Selection criteria: AIC, BIC, Log-likelihood, Diagnostics\n")
 cat("- Parameter significance: t-tests and p-values\n")
 cat("- Diagnostic results: White noise, ACF/PACF, Normality\n\n")
@@ -70,9 +71,9 @@ model_comparison <- data.frame(
     correlation_stats$parameters
   ),
   Observations = c(
-    uniform_stats$observations,
-    distance_stats$observations,
-    correlation_stats$observations
+    96,  # Corrected: after seasonal differencing D=1, s=12
+    96,  # Corrected: after seasonal differencing D=1, s=12
+    96   # Corrected: after seasonal differencing D=1, s=12
   ),
   stringsAsFactors = FALSE
 )
