@@ -1,6 +1,6 @@
 # ============================================================================
 # STARIMA Forecasting Pipeline - Phase 4b: Residual Visualization per Region
-# File: 11b_STARIMA_Residual_Visualization.R
+# File: 13_STARIMA_Residual_Visualization.R
 # Purpose: Visualize residual diagnostics for STARIMA model (Uniform Weights)
 # Author: STARMA Analysis
 # Date: 2024
@@ -56,7 +56,7 @@ for (r in regions) {
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5))
   
-  ggsave(paste0("plots/11b_residual_timeseries_", r, ".png"), 
+  ggsave(paste0("plots/13_residual_timeseries_", r, ".png"), 
          p, width = 8, height = 4, dpi = 300)
   ts_plots[[r]] <- p
   cat("✅ Time-series plot saved for:", r, "\n")
@@ -82,7 +82,7 @@ for (r in regions) {
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5))
   
-  ggsave(paste0("plots/11b_residual_histogram_", r, ".png"),
+  ggsave(paste0("plots/13_residual_histogram_", r, ".png"),
          p, width = 7, height = 4, dpi = 300)
   hist_plots[[r]] <- p
   cat("✅ Histogram plot saved for:", r, "\n")
@@ -95,7 +95,7 @@ cat("\n🔁 Generating ACF/PACF residual diagnostics...\n")
 
 for (r in regions) {
   ts_resid <- ts(resid_matrix[, r])
-  png(paste0("plots/11b_residual_acf_pacf_", r, ".png"),
+  png(paste0("plots/13_residual_acf_pacf_", r, ".png"),
       width = 1000, height = 400)
   par(mfrow = c(1, 2))
   Acf(ts_resid, main = paste("ACF Residual -", r))
@@ -120,9 +120,9 @@ if (length(ts_plots) >= 2) {
 # SAVE RESULTS
 # ============================================================================
 save(resid_matrix, ts_plots, hist_plots,
-     file = "output/11b_starima_residual_visualization.RData")
+     file = "output/13_starima_residual_visualization.RData")
 
 cat("\n💾 All residual plots saved to 'plots/' folder.\n")
-cat("📁 Results summary saved to: output/11b_starima_residual_visualization.RData\n\n")
+cat("📁 Results summary saved to: output/13_starima_residual_visualization.RData\n\n")
 cat("🎯 Residual diagnostics completed successfully.\n")
 cat("Next: proceed to 12_STARIMA_Forecasting_Per_Region.R for forecasting.\n")

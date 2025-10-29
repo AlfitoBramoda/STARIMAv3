@@ -218,12 +218,6 @@ residual_stats <- data.frame(
 
 print(residual_stats)
 
-# Compute residual ACF and PACF for diagnostic analysis
-residual_acf <- acf(as.vector(residuals_distance), plot = FALSE, lag.max = 20)
-residual_pacf <- pacf(as.vector(residuals_distance), plot = FALSE, lag.max = 20)
-
-cat("✅ Residual ACF/PACF computed for diagnostic analysis\n")
-
 # ============================================================================
 # ADDITIONAL DIAGNOSTICS: TEMPORAL & SPATIAL AUTOCORRELATION TESTS
 # ============================================================================
@@ -390,6 +384,18 @@ cat("✅ Residual plot saved: plots/10b_distance_residuals.png\n")
 cat("✅ Residual distribution saved: plots/10b_distance_residual_dist.png\n")
 
 # ============================================================================
+# RESIDUAL ACF/PACF CALCULATION
+# ============================================================================
+
+cat("\n🔍 Calculating Residual ACF/PACF...\n")
+
+# Hitung ACF dan PACF residual untuk diagnostic
+residual_acf <- acf(as.vector(residuals_distance), plot = FALSE, lag.max = 20)
+residual_pacf <- pacf(as.vector(residuals_distance), plot = FALSE, lag.max = 20)
+
+cat("✅ Residual ACF/PACF calculated for diagnostic analysis\n")
+
+# ============================================================================
 # SAVE RESULTS
 # ============================================================================
 
@@ -411,7 +417,7 @@ distance_results <- list(
 )
 
 # Save results
-save(distance_results, starima_distance, coef_table, residuals_distance,
+save(distance_results, starima_distance, coef_table, residuals_distance, 
      residual_acf, residual_pacf,
      file = "output/10b_starima_distance.RData")
 

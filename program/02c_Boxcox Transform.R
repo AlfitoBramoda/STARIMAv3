@@ -11,7 +11,7 @@ library(ggplot2)
 library(gridExtra)
 
 # Load data
-load("output/02b_data_split.RData")
+load("output/02_data_split.RData")
 
 regions <- colnames(train_data)
 n_regions <- length(regions)
