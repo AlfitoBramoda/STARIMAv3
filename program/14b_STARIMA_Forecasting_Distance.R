@@ -6,6 +6,9 @@
 
 cat("=== STARIMA FORECASTING - DISTANCE WEIGHTS ===\n\n")
 
+# Set seed for reproducible results
+set.seed(12345)
+
 # Dependencies
 req <- c("starma","ggplot2","dplyr","tidyr")
 for (p in req) {
@@ -150,18 +153,28 @@ for (col in 1:ncol(Y)) {
     # Combine components
     forecast_val <- base_forecast + trend_component + ar_component + ma_component + seasonal_variation
     
-    # Consistent bounds for all weight types
+    # UNIFORM SAFETY MEASURES (Applied to ALL weight types)
+    
+    # 1. Bounds checking - prevent extreme forecasts
     forecast_val <- pmax(train_range[1] * 0.5, 
                          pmin(train_range[2] * 1.5, forecast_val))
     
-    # Safety checks for extreme values
+    # 2. Extreme value detection and correction
     if (is.na(forecast_val) || is.infinite(forecast_val) || abs(forecast_val) > 20) {
+      cat("⚠️ Extreme forecast detected in Distance, using base forecast\n")
       forecast_val <- base_forecast
     }
     
-    # Check for explosive growth
+    # 3. Explosive growth prevention
     if (t > 1 && abs(forecast_val) > abs(forecast_final[t-1, col]) * 3) {
+      cat("⚠️ Explosive growth detected in Distance, dampening...\n")
       forecast_val <- (forecast_val + base_forecast) / 2
+    }
+    
+    # 4. Additional stability check
+    if (t > 2 && abs(forecast_val - forecast_final[t-1, col]) > train_sd * 5) {
+      cat("⚠️ Large jump detected in Distance, smoothing...\n")
+      forecast_val <- 0.7 * forecast_val + 0.3 * forecast_final[t-1, col]
     }
     
     forecast_final[t, col] <- forecast_val
@@ -181,6 +194,11 @@ for (t in 1:h) {
         if (!is.na(weight) && weight > 0) {
           neighbor_val <- forecast_final[t, neighbor]
           spatial_effect <- spatial_effect + weight * neighbor_val * 0.08
+          
+          # Safety check for spatial effect
+          if (abs(spatial_effect) > abs(forecast_final[t, col]) * 0.5) {
+            spatial_effect <- sign(spatial_effect) * abs(forecast_final[t, col]) * 0.5
+          }
         }
       }
     }

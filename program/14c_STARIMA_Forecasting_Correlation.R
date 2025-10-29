@@ -6,6 +6,9 @@
 
 cat("=== STARIMA FORECASTING - CORRELATION WEIGHTS ===\n\n")
 
+# Set seed for reproducible results
+set.seed(12345)
+
 # Dependencies
 req <- c("starma","ggplot2","dplyr","tidyr")
 for (p in req) {
@@ -219,20 +222,28 @@ for (col in 1:ncol(Y)) {
     # Combine components
     forecast_val <- base_forecast + trend_component + ar_component + ma_component + seasonal_variation
     
-    # Enhanced safety bounds for extreme correlation coefficients
+    # UNIFORM SAFETY MEASURES (Applied to ALL weight types)
+    
+    # 1. Bounds checking - prevent extreme forecasts
     forecast_val <- pmax(train_range[1] * 0.5, 
                          pmin(train_range[2] * 1.5, forecast_val))
     
-    # Multiple safety checks for extreme values
+    # 2. Extreme value detection and correction
     if (is.na(forecast_val) || is.infinite(forecast_val) || abs(forecast_val) > 20) {
-      cat("⚠️ Extreme forecast detected, using base forecast\n")
+      cat("⚠️ Extreme forecast detected in Correlation, using base forecast\n")
       forecast_val <- base_forecast
     }
     
-    # Additional check for explosive growth
+    # 3. Explosive growth prevention
     if (t > 1 && abs(forecast_val) > abs(forecast_final[t-1, col]) * 3) {
-      cat("⚠️ Explosive growth detected, dampening...\n")
+      cat("⚠️ Explosive growth detected in Correlation, dampening...\n")
       forecast_val <- (forecast_val + base_forecast) / 2
+    }
+    
+    # 4. Additional stability check
+    if (t > 2 && abs(forecast_val - forecast_final[t-1, col]) > train_sd * 5) {
+      cat("⚠️ Large jump detected in Correlation, smoothing...\n")
+      forecast_val <- 0.7 * forecast_val + 0.3 * forecast_final[t-1, col]
     }
     
     forecast_final[t, col] <- forecast_val
@@ -253,11 +264,16 @@ for (t in 1:h) {
           neighbor_val <- forecast_final[t, neighbor]
           # Moderate spatial effect for correlation weights
           spatial_effect <- spatial_effect + weight * neighbor_val * 0.08
+          
+          # Safety check for spatial effect
+          if (abs(spatial_effect) > abs(forecast_final[t, col]) * 0.5) {
+            spatial_effect <- sign(spatial_effect) * abs(forecast_final[t, col]) * 0.5
+          }
         }
       }
     }
     
-    # Constrain spatial effect
+    # Uniform spatial effect constraints (same as other weight types)
     spatial_effect <- pmax(-abs(forecast_final[t, col]) * 0.2, 
                           pmin(abs(forecast_final[t, col]) * 0.2, spatial_effect))
     spatial_effects[1, col] <- spatial_effect
@@ -266,9 +282,10 @@ for (t in 1:h) {
   # Apply spatial effects with additional bounds check
   new_forecast <- forecast_final[t, ] + spatial_effects[1, ]
   
-  # Safety check for extreme values
+  # Uniform safety check for spatial effects (same as other weight types)
   for (col in 1:ncol(forecast_final)) {
     if (is.na(new_forecast[col]) || is.infinite(new_forecast[col]) || abs(new_forecast[col]) > 20) {
+      cat("⚠️ Spatial effect caused extreme value in Correlation, reverting...\n")
       new_forecast[col] <- forecast_final[t, col]  # Keep original if spatial effect causes problems
     }
   }

@@ -21,7 +21,7 @@ if(!is.null(dev.list())) {
 cat("✅ Working directory:", getwd(), "\n")
 
 # 4. Remove output directories dan isinya
-output_dirs <- c("results", "plots", "models")
+output_dirs <- c("results", "plots", "models", "output")
 for(dir in output_dirs) {
   if(dir.exists(dir)) {
     unlink(dir, recursive = TRUE)
