@@ -1,7 +1,7 @@
 # ============================================================================
 # STARMA Forecasting Pipeline - Phase 3: STARIMA Estimation
 # File: 10c_STARIMA_Estimation_correlation.R
-# Purpose: Estimate STARIMA(1,0,2) model using correlation spatial weights
+# Purpose: Estimate STARIMA(3,0,3) model using correlation spatial weights
 # Author: STARMA Analysis
 # Date: 2024
 # ============================================================================
@@ -12,7 +12,7 @@ load("output/05_spatial_weights.RData")
 load("output/04_centered_data.RData")
 
 cat("=== STARIMA ESTIMATION - correlation WEIGHTS ===\n")
-#cat("Estimating STARIMA(1,0,2) model using correlation spatial weights...\n\n")
+#cat("Estimating STARIMA(3,0,3) model using correlation spatial weights...\n\n")
 
 # ============================================================================
 # ESTIMATION SETUP
@@ -331,7 +331,7 @@ coef_plot <- ggplot(coef_table, aes(x = Parameter, y = Estimate)) +
   geom_errorbar(aes(ymin = Estimate - 1.96*Std_Error, 
                     ymax = Estimate + 1.96*Std_Error), 
                 width = 0.2) +
-  labs(title = "STARIMA(1,0,2) Parameter Estimates - correlation Weights",
+  labs(title = "STARIMA(3,0,3) Parameter Estimates - correlation Weights",
        subtitle = paste("Total parameters:", total_params),
        x = "Parameters", y = "Estimate") +
   theme_minimal() +

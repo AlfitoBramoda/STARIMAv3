@@ -30,7 +30,7 @@ n_observations <- 108    # jumlah observasi training
 # ============================================================================
 create_ar_mask <- function(p_order, max_spatial_lag) {
   # PERBAIKAN: Validate inputs
-  if (is.null(p_order) || is.na(p_order) || p_order <= 0) p_order <- 1
+  if (is.null(p_order) || is.na(p_order) || p_order <= 0) p_order <- 3
   if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
   
   ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = p_order)
@@ -46,7 +46,7 @@ create_ar_mask <- function(p_order, max_spatial_lag) {
 
 create_ma_mask <- function(q_order, max_spatial_lag) {
   # PERBAIKAN: Validate inputs
-  if (is.null(q_order) || is.na(q_order) || q_order <= 0) q_order <- 1
+  if (is.null(q_order) || is.na(q_order) || q_order <= 0) q_order <- 3
   if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
   
   ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = q_order)
@@ -126,8 +126,8 @@ for (w in weight_types) {
   })
   
   # PERBAIKAN: More robust parameter extraction
-  p_order <- 1  # Default
-  q_order <- 1  # Default
+  p_order <- 3  # Default
+  q_order <- 3  # Default
   
   if (!is.null(ar_obj) && is.list(ar_obj) && !is.null(ar_obj$suggested_p)) {
     p_order <- as.numeric(ar_obj$suggested_p)

@@ -15,7 +15,7 @@ load("output/11b_diagnostic_distance.RData")
 load("output/11c_diagnostic_correlation.RData")
 
 cat("=== STARIMA MODEL SELECTION & COMPARISON ===\n")
-cat("Comparing three STARIMA(1,0,2) models for best model selection...\n\n")
+cat("Comparing three STARIMA(3,0,3) models for best model selection...\n\n")
 
 # ============================================================================
 # SETUP AND DATA PREPARATION
@@ -27,7 +27,7 @@ library(gridExtra)
 
 cat("📋 Model Selection Setup:\n")
 cat("=========================\n")
-cat("- Models to compare: 3 STARIMA(1,0,2) models\n")
+cat("- Models to compare: 3 STARIMA(3,0,3) models\n")
 cat("- Spatial weights: Uniform, Distance, Correlation\n")
 cat("- Observations: 96 (after seasonal differencing D=1, s=12)\n")
 cat("- Selection criteria: AIC, BIC, Log-likelihood, Diagnostics\n")
@@ -196,7 +196,7 @@ print(diagnostic_summary)
 
 cat("\n📋 Diagnostic Insights:\n")
 cat("- All models show identical diagnostic patterns\n")
-cat("- STARIMA(1,0,2) insufficient for tropical rainfall complexity\n")
+cat("- STARIMA(3,0,3) insufficient for tropical rainfall complexity\n")
 
 # ============================================================================
 # SPATIAL WEIGHT INSENSITIVITY VALIDATION

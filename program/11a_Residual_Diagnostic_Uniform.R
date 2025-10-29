@@ -405,7 +405,7 @@ cat("======================\n")
 overall_adequate <- model_adequate && acf_adequate
 
 diagnostic_results <- list(
-  model_type = "STARIMA(1,0,2) - Uniform Weights",
+  model_type = "STARIMA(3,0,3) - Uniform Weights",
   stcor_test = if(exists("stcor_result")) stcor_result else NULL,
   white_noise = model_adequate,
   acf_adequate = acf_adequate,
@@ -481,5 +481,5 @@ cat("- Residual correlation: ✅\n")
 cat("- Normality assessment: ✅\n")
 cat("- Visual diagnostics: ✅\n")
 
-cat("\n🎉 STARIMA(1,0,2) uniform weights diagnostic completed!\n")
+cat("\n🎉 STARIMA(3,0,3) uniform weights diagnostic completed!\n")
 cat("Model status:", ifelse(overall_adequate, "READY FOR FORECASTING", "NEEDS REVISION"), "\n")

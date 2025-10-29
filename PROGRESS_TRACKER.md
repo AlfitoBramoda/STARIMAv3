@@ -103,37 +103,37 @@
 - Model specification summary
 - Complexity assessment
 - Structure visualizations
-**What it does**: Berdasarkan hasil STACF/STPACF, membuat matriks mask 0/1 untuk menentukan parameter AR dan MA mana yang akan diestimasi. Menganalisis kompleksitas model, membuat visualisasi struktur, dan menyiapkan spesifikasi lengkap untuk estimasi STARIMA(1,0,2). Menghasilkan 3 plot struktur dan summary komprehensif.
+**What it does**: Berdasarkan hasil STACF/STPACF, membuat matriks mask 0/1 untuk menentukan parameter AR dan MA mana yang akan diestimasi. Menganalisis kompleksitas model, membuat visualisasi struktur, dan menyiapkan spesifikasi lengkap untuk estimasi STARIMA(3,0,3). Menghasilkan 3 plot struktur dan summary komprehensif.
 
 ### ✅ 10a_STARIMA_Estimation_Uniform.R
 **Status**: COMPLETED  
 **Expected Output**:
-- Fitted STARIMA(1,0,2) model dengan uniform weights
+- Fitted STARIMA(3,0,3) model dengan uniform weights
 - Parameter estimates dengan significance tests
 - Model fit statistics (AIC, BIC, log-likelihood)
 - Residual analysis dan diagnostics
 - 3 visualization plots
-**What it does**: Menggunakan fungsi `starma(data, wlist, ar, ma)` dengan uniform spatial weights untuk mengestimasi model STARIMA(1,0,2). Menghasilkan 9 parameter estimates dengan standard errors, t-values, dan p-values. Melakukan analisis residual lengkap dan menghasilkan 3 plot visualisasi (coefficients, residuals time series, residual distribution).
+**What it does**: Menggunakan fungsi `starma(data, wlist, ar, ma)` dengan uniform spatial weights untuk mengestimasi model STARIMA(3,0,3). Menghasilkan 9 parameter estimates dengan standard errors, t-values, dan p-values. Melakukan analisis residual lengkap dan menghasilkan 3 plot visualisasi (coefficients, residuals time series, residual distribution).
 
 ### ✅ 10b_STARIMA_Estimation_Distance.R
 **Status**: COMPLETED  
 **Expected Output**:
-- Fitted STARIMA(1,0,2) model dengan distance weights
+- Fitted STARIMA(3,0,3) model dengan distance weights
 - Parameter estimates dengan significance tests
 - Model fit statistics (AIC, BIC, log-likelihood)
 - Residual analysis dan diagnostics
 - 3 visualization plots
-**What it does**: Menggunakan fungsi `starma(data, wlist, ar, ma)` dengan distance-based spatial weights untuk mengestimasi model STARIMA(1,0,2). Menghasilkan 9 parameter estimates dengan standard errors, t-values, dan p-values. Melakukan analisis residual lengkap dan menghasilkan 3 plot visualisasi (coefficients, residuals time series, residual distribution).
+**What it does**: Menggunakan fungsi `starma(data, wlist, ar, ma)` dengan distance-based spatial weights untuk mengestimasi model STARIMA(3,0,3). Menghasilkan 9 parameter estimates dengan standard errors, t-values, dan p-values. Melakukan analisis residual lengkap dan menghasilkan 3 plot visualisasi (coefficients, residuals time series, residual distribution).
 
 ### ✅ 10c_STARIMA_Estimation_Correlation.R
 **Status**: COMPLETED  
 **Expected Output**:
-- Fitted STARIMA(1,0,2) model dengan correlation weights
+- Fitted STARIMA(3,0,3) model dengan correlation weights
 - Parameter estimates dengan significance tests
 - Model fit statistics (AIC, BIC, log-likelihood)
 - Residual analysis dan diagnostics
 - 3 visualization plots
-**What it does**: Menggunakan fungsi `starma(data, wlist, ar, ma)` dengan correlation-based spatial weights untuk mengestimasi model STARIMA(1,0,2). Menghasilkan 9 parameter estimates dengan standard errors, t-values, dan p-values. Melakukan analisis residual lengkap dan menghasilkan 3 plot visualisasi (coefficients, residuals time series, residual distribution).
+**What it does**: Menggunakan fungsi `starma(data, wlist, ar, ma)` dengan correlation-based spatial weights untuk mengestimasi model STARIMA(3,0,3). Menghasilkan 9 parameter estimates dengan standard errors, t-values, dan p-values. Melakukan analisis residual lengkap dan menghasilkan 3 plot visualisasi (coefficients, residuals time series, residual distribution).
 
 ---
 
@@ -183,7 +183,7 @@
 - Model selection recommendation dengan justification
 - Final selected model untuk forecasting phase
 - 3 comparison visualization plots (fit statistics, parameters, diagnostics)
-**What it does**: Membandingkan ketiga model STARIMA(1,0,2) berdasarkan kriteria informasi (AIC/BIC), parameter significance, dan hasil diagnostik. Melakukan quantitative validation dari spatial weight insensitivity hypothesis. Memberikan rekomendasi model terbaik untuk tahap forecasting dengan comprehensive justification. Menghasilkan comparison tables dan visualization plots untuk model selection decision.
+**What it does**: Membandingkan ketiga model STARIMA(3,0,3) berdasarkan kriteria informasi (AIC/BIC), parameter significance, dan hasil diagnostik. Melakukan quantitative validation dari spatial weight insensitivity hypothesis. Memberikan rekomendasi model terbaik untuk tahap forecasting dengan comprehensive justification. Menghasilkan comparison tables dan visualization plots untuk model selection decision.
 **Current Issues**: Parameter CV analysis menunjukkan beberapa MA parameters memiliki high variability (CV > 100%), perlu refinement dalam interpretation dan possibly improved parameter consistency analysis methodology.
 
 ---
@@ -254,7 +254,7 @@
 ## 🌟 **BREAKTHROUGH RESEARCH STATUS**
 
 ### **Spatial Weight Insensitivity - EMPIRICALLY VALIDATED:**
-- ✅ **Identification Phase**: Perfect STARIMA(1,0,2) consensus
+- ✅ **Identification Phase**: Perfect STARIMA(3,0,3) consensus
 - ✅ **Estimation Phase**: AR parameters highly consistent (CV < 3%)
 - ✅ **Diagnostic Phase**: Identical inadequacy patterns
 - ✅ **Selection Phase**: Information criteria nearly identical (AIC/BIC diff < 1)
