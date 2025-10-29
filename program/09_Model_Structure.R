@@ -30,7 +30,7 @@ n_observations <- 108    # jumlah observasi training
 # ============================================================================
 create_ar_mask <- function(p_order, max_spatial_lag) {
   # PERBAIKAN: Validate inputs
-  if (is.null(p_order) || is.na(p_order) || p_order <= 0) p_order <- 3
+  if (is.null(p_order) || is.na(p_order) || p_order <= 0) p_order <- 1
   if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
   
   ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = p_order)
@@ -125,19 +125,12 @@ for (w in weight_types) {
     cat("⚠️ Warning:", paste0(w, "_ma"), "not found, using default\n")
   })
   
-  # PERBAIKAN: More robust parameter extraction
-  p_order <- 3  # Default
-  q_order <- 3  # Default
+  # FIXED PARAMETERS: STARIMA(1,0,1,3)
+  p_order <- 1  # AR order = 1 (fixed)
+  q_order <- 3  # MA order = 3 (fixed)
   
-  if (!is.null(ar_obj) && is.list(ar_obj) && !is.null(ar_obj$suggested_p)) {
-    p_order <- as.numeric(ar_obj$suggested_p)
-    if (is.na(p_order) || p_order <= 0) p_order <- 1
-  }
-  
-  if (!is.null(ma_obj) && is.list(ma_obj) && !is.null(ma_obj$suggested_q)) {
-    q_order <- as.numeric(ma_obj$suggested_q)
-    if (is.na(q_order) || q_order <= 0) q_order <- 1
-  }
+  # Using fixed parameters - no automatic identification
+  # p_order = 1, q_order = 3 for all spatial weights
   
   cat("- AR order (p):", p_order, "\n")
   cat("- MA order (q):", q_order, "\n")

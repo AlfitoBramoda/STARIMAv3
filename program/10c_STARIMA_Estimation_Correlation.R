@@ -26,7 +26,7 @@ cat("- Training data: 96 observations (after seasonal differencing D=1, s=12)\n"
 cat("- Parameters to estimate:", total_params, "\n")
 cat("- Degrees of freedom:", 96 - total_params, "\n\n")
 
-# Prepare data and weights (train_data already loaded from 06_data_split.RData)
+# Prepare data and weights (centered_matrix from 04_centered_data.RData)
 # Convert spatial weights to proper wlist format for starma function
 correlation_matrix <- spatial_weights$correlation
 
@@ -55,7 +55,7 @@ for (i in 2:length(wlist_correlation)) {
 }
 
 cat("Data dimensions:\n")
-cat("- Training data:", dim(train_data), "\n")
+cat("- Centered data:", dim(centered_matrix), "\n")
 cat("- Spatial weights list:", length(wlist_correlation), "matrices\n")
 cat("- Each matrix dimension:", dim(wlist_correlation[[1]]), "\n\n")
 
@@ -75,13 +75,13 @@ cat("Starting estimation with parameters:\n")
 cat("- AR mask dimensions:", dim(ar_mask), "\n")
 cat("- MA mask dimensions:", dim(ma_mask), "\n")
 cat("- Spatial weights list:", length(wlist_correlation), "lags\n")
-cat("- Data class:", class(train_data), "\n")
+cat("- Data class:", class(centered_matrix), "\n")
 cat("- Weights class:", class(wlist_correlation), "\n\n")
 
 # Estimate the model
 tryCatch({
   starima_correlation <- starma(
-    data = train_data,
+    data = centered_matrix,
     wlist = wlist_correlation,
     ar = ar_mask,
     ma = ma_mask
