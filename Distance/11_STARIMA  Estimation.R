@@ -42,7 +42,7 @@ d_order <- 1
 
 # ------------------------------ Model Orders (EXPERIMENT HERE!) --------------------------------
 # 🧪 CHANGE THESE VALUES TO EXPERIMENT WITH DIFFERENT ORDERS:
-p_order <- 3          # AR order (try: 1, 2, 3, 4)
+p_order <- 1          # AR order (try: 1, 2, 3, 4)
 q_order <- 2          # MA order (try: 1, 2, 3)
 max_spatial_lag <- 1  # Spatial lags (usually keep at 1)
 
