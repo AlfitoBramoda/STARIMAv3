@@ -1,20 +1,20 @@
 # ============================================================================
-# STARIMA Forecasting - Distance Weights
-# File   : 15_STARIMA_Forecasting_Distance.R
-# Purpose: Forecast dengan pembobotan Distance-based
+# STARIMA Forecasting - Correlation Weights
+# File   : 15_STARIMA_Forecasting_Correlation.R
+# Purpose: Forecast dengan pembobotan Correlation-based
 # ============================================================================
 
 # Extract dynamic model orders from results
-if (exists("distance_results") && !is.null(distance_results$orders)) {
-  p_order <- distance_results$orders$p
-  d_order <- distance_results$orders$d
-  q_order <- distance_results$orders$q
+if (exists("correlation_results") && !is.null(correlation_results$orders)) {
+  p_order <- correlation_results$orders$p
+  d_order <- correlation_results$orders$d
+  q_order <- correlation_results$orders$q
   model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
 } else {
   model_name <- "STARIMA(2,1,2)"  # fallback
 }
 
-cat(sprintf("=== %s FORECASTING - DISTANCE WEIGHTS ===\n\n", model_name))
+cat(sprintf("=== %s FORECASTING - CORRELATION WEIGHTS ===\n\n", model_name))
 
 # Set seed for reproducible results
 set.seed(12345)
@@ -29,28 +29,28 @@ for (p in req) {
 }
 
 # Load data
-load("output/11_starima_distance.RData")   # distance_results
+load("output/11_starima_correlation.RData")   # correlation_results
 load("output/03_data_split.RData")         # train_data, test_data
 load("output/05_differencing_results.RData")  # differenced_matrix
 load("output/04_boxcox_data.RData")        # final_data, lambda_overall, transformation_applied
-load("output/07_spatial_weights_distance.RData")    # spatial_weights
-load("output/10_model_structure_distance_weights.RData")    # model structure
+load("output/07_spatial_weights_correlation.RData")    # spatial_weights
+load("output/10_model_structure_correlation_weights.RData")    # model structure
 
-cat("Data loaded - Using DISTANCE weights\n")
+cat("Data loaded - Using CORRELATION weights\n")
 
 # Setup data - USE SAME SCALE AS TRAINING (differenced_matrix)
 Y <- differenced_matrix
 Y <- apply(Y, 2, as.numeric)
 cat("✅ Using differenced_matrix for consistent forecasting\n")
 
-# Load and validate coefficients from distance model
-if (exists("distance_results") && !is.null(distance_results$model)) {
-  model <- distance_results$model
+# Load and validate coefficients from correlation model
+if (exists("correlation_results") && !is.null(correlation_results$model)) {
+  model <- correlation_results$model
   
   # Extract coefficients from the model
   if (!is.null(model$phi)) {
     phi <- model$phi
-    cat("Using ORIGINAL distance phi coefficients:\n")
+    cat("Using ORIGINAL correlation phi coefficients:\n")
     print(phi[1:min(3, nrow(phi)), 1])
   } else {
     phi <- matrix(c(0.4, 0.2, 0.1), ncol = 1)
@@ -59,7 +59,7 @@ if (exists("distance_results") && !is.null(distance_results$model)) {
   
   if (!is.null(model$theta)) {
     theta <- model$theta
-    cat("Using ORIGINAL distance theta coefficients:\n")
+    cat("Using ORIGINAL correlation theta coefficients:\n")
     print(theta[1:min(2, nrow(theta)), 1])
   } else {
     theta <- matrix(c(0.3, 0.15), ncol = 1)
@@ -80,8 +80,8 @@ if (any(abs(phi) > 2.0, na.rm = TRUE) || any(abs(theta) > 2.0, na.rm = TRUE)) {
 
 cat("Phi range:", range(phi), "Theta range:", range(theta), "\n")
 
-# Spatial weights setup - DISTANCE
-W_matrix <- spatial_weights$distance
+# Spatial weights setup - CORRELATION
+W_matrix <- spatial_weights$correlation
 wlist <- list()
 wlist[[1]] <- diag(nrow(W_matrix))
 wlist[[2]] <- W_matrix
@@ -98,19 +98,19 @@ for (k in 2:length(wlist)) {
 # ============================================================================
 # HYBRID APPROACH: Built-in STARIMA Prediction + Spatial Adjustment
 # ============================================================================
-cat("\n🎯 HYBRID FORECASTING APPROACH - DISTANCE WEIGHTS\n")
+cat(sprintf("\n🎯 HYBRID FORECASTING APPROACH - CORRELATION WEIGHTS\n"))
 cat("=================================================\n")
 
 h <- nrow(test_data)
 # forecast_final will be created by STARIMA implementation
 
 # Step 1: Try built-in STARIMA prediction (often fails due to data format issues)
-if (exists("distance_results") && !is.null(distance_results$model)) {
+if (exists("correlation_results") && !is.null(correlation_results$model)) {
   cat("🔄 Attempting built-in STARIMA prediction...\n")
   
   tryCatch({
     # Use starma predict function with proper data handling
-    starma_model <- distance_results$model
+    starma_model <- correlation_results$model
     
     # Check if model has required components for prediction
     if (is.null(starma_model$phi) || is.null(starma_model$theta)) {
@@ -156,7 +156,7 @@ if (exists("distance_results") && !is.null(distance_results$model)) {
     cat("📊 Base forecast range:", round(range(forecast_matrix, na.rm = TRUE), 3), "\n")
     
     # Step 2: Apply spatial adjustments
-    cat("🔧 Applying distance-based spatial adjustments...\n")
+    cat("🔧 Applying correlation-based spatial adjustments...\n")
     
     for (t in 1:h) {
       for (col in 1:ncol(forecast_matrix)) {
@@ -169,8 +169,8 @@ if (exists("distance_results") && !is.null(distance_results$model)) {
             weight <- wlist[[2]][col, neighbor]
             if (!is.na(weight) && weight > 0) {
               neighbor_val <- forecast_matrix[t, neighbor]
-              # Moderate spatial influence for distance weights
-              spatial_adjustment <- spatial_adjustment + weight * (neighbor_val - base_val) * 0.15
+              # Stronger spatial influence for correlation weights
+              spatial_adjustment <- spatial_adjustment + weight * (neighbor_val - base_val) * 0.25
             }
           }
         }
@@ -226,7 +226,7 @@ if (exists("distance_results") && !is.null(distance_results$model)) {
       for (t in 1:h) {
         forecast_val <- 0
         
-        # AR(2) component
+        # AR component
         for (p in 1:min(length(phi_coefs), 2)) {
           if (t > p) {
             # Use previous forecasts from new matrix
@@ -239,7 +239,7 @@ if (exists("distance_results") && !is.null(distance_results$model)) {
           forecast_val <- forecast_val + phi_coefs[p] * ar_val
         }
         
-        # MA(2) component
+        # MA component
         for (q in 1:min(length(theta_coefs), 2)) {
           if (t > q) {
             # Use recent residuals (simplified as small random values)
@@ -252,7 +252,7 @@ if (exists("distance_results") && !is.null(distance_results$model)) {
           forecast_val <- forecast_val + theta_coefs[q] * residual
         }
         
-        # Spatial component
+        # Spatial component - stronger for correlation weights
         spatial_adj <- 0
         for (neighbor in 1:ncol(Y)) {
           if (neighbor != col) {
@@ -263,7 +263,7 @@ if (exists("distance_results") && !is.null(distance_results$model)) {
               } else {
                 neighbor_val <- starima_forecast[t-1, neighbor]
               }
-              spatial_adj <- spatial_adj + weight * neighbor_val * 0.05  # Reduce spatial influence
+              spatial_adj <- spatial_adj + weight * neighbor_val * 0.08  # Higher spatial influence
             }
           }
         }
@@ -464,12 +464,12 @@ cat("📊 Test data range:", round(range(test_data), 2), "\n")
 # ============================================================================
 cat("\n📈 Evaluating in original scale...\n")
 
-region_eval_distance <- data.frame(
+region_eval_correlation <- data.frame(
   Region = colnames(test_data),
   MAE = NA_real_, 
   MSE = NA_real_, 
   RMSE = NA_real_,
-  Weight_Type = "Distance"
+  Weight_Type = "Correlation"
 )
 
 for (r in colnames(test_data)) {
@@ -482,21 +482,21 @@ for (r in colnames(test_data)) {
     mse_val <- mean((actual[valid_idx] - pred[valid_idx])^2)
     rmse_val <- sqrt(mse_val)
     
-    region_eval_distance[region_eval_distance$Region == r, c("MAE","MSE","RMSE")] <-
+    region_eval_correlation[region_eval_correlation$Region == r, c("MAE","MSE","RMSE")] <-
       round(c(mae_val, mse_val, rmse_val), 3)
   }
 }
 
-cat(sprintf("✅ %s - DISTANCE weights forecasting completed\n", model_name))
-print(region_eval_distance)
+cat(sprintf("✅ %s - CORRELATION weights forecasting completed\n", model_name))
+print(region_eval_correlation)
 
 # Save results
-results_distance <- list(
+results_correlation <- list(
   forecast_original_scale = forecast_original,      # Final forecast (original scale)
   forecast_transformed_scale = forecast_final,      # Intermediate forecast (differenced scale)
   forecast_undifferenced = forecast_undifferenced,  # After inverse differencing
-  metrics = region_eval_distance,
-  weights = "distance",
+  metrics = region_eval_correlation,
+  weights = "correlation",
   spatial_weights = wlist,
   transformation_info = list(
     used_differenced_matrix = TRUE,
@@ -505,8 +505,8 @@ results_distance <- list(
   )
 )
 
-save(results_distance, file = "output/15_forecast_distance.RData")
-cat("💾 Results saved to: output/15_forecast_distance.RData\n")
+save(results_correlation, file = "output/15_forecast_correlation.RData")
+cat("💾 Results saved to: output/15_forecast_correlation.RData\n")
 cat("\n🎉 METHODOLOGICALLY CORRECT FORECASTING COMPLETED!\n")
 cat("✅ Training: differenced_matrix\n")
 cat("✅ Forecasting: differenced_matrix\n")

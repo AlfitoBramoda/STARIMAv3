@@ -483,7 +483,7 @@ for (r in colnames(test_data)) {
     rmse_val <- sqrt(mse_val)
     
     region_eval_uniform[region_eval_uniform$Region == r, c("MAE","MSE","RMSE")] <-
-      round(c(mae_val, mse_val, rmse_val), 4)
+      round(c(mae_val, mse_val, rmse_val), 3)
   }
 }
 
