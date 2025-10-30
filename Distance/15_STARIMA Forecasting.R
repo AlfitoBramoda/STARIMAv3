@@ -1,10 +1,10 @@
 # ============================================================================
-# STARIMA Forecasting - Uniform Weights
-# File   : 14a_STARIMA_Forecasting_Uniform.R
-# Purpose: Forecast dengan pembobotan Uniform
+# STARIMA Forecasting - Distance Weights
+# File   : 15_STARIMA_Forecasting_Distance.R
+# Purpose: Forecast dengan pembobotan Distance-based
 # ============================================================================
 
-cat("=== STARIMA FORECASTING - UNIFORM WEIGHTS ===\n\n")
+cat("=== STARIMA FORECASTING - DISTANCE WEIGHTS ===\n\n")
 
 # Set seed for reproducible results
 set.seed(12345)
@@ -19,37 +19,46 @@ for (p in req) {
 }
 
 # Load data
-load("output/11_starima_uniform.RData")   # starima_uniform
+load("output/11_starima_distance.RData")   # distance_results
 load("output/03_data_split.RData")         # train_data, test_data
 load("output/05_differencing_results.RData")  # differenced_matrix
 load("output/04_boxcox_data.RData")        # final_data, lambda_overall, transformation_applied
-load("output/07_spatial_weights_uniform.RData")    # spatial_weights
-load("output/09_model_structure_all_weights.RData")    # p_order, d_order, q_order
+load("output/07_spatial_weights_distance.RData")    # spatial_weights
+load("output/10_model_structure_distance_weights.RData")    # model structure
 
-cat("Data loaded - Using UNIFORM weights\n")
+cat("Data loaded - Using DISTANCE weights\n")
 
 # Setup data - USE SAME SCALE AS TRAINING (differenced_matrix)
 Y <- differenced_matrix
 Y <- apply(Y, 2, as.numeric)
 cat("✅ Using differenced_matrix for consistent forecasting\n")
 
-# Load and validate coefficients
-if (exists("starima_uniform") && !is.null(starima_uniform$phi)) {
-  phi <- starima_uniform$phi
-  cat("Using ORIGINAL uniform phi coefficients:\n")
-  print(phi[1:min(3, nrow(phi)), 1])
+# Load and validate coefficients from distance model
+if (exists("distance_results") && !is.null(distance_results$model)) {
+  model <- distance_results$model
+  
+  # Extract coefficients from the model
+  if (!is.null(model$phi)) {
+    phi <- model$phi
+    cat("Using ORIGINAL distance phi coefficients:\n")
+    print(phi[1:min(3, nrow(phi)), 1])
+  } else {
+    phi <- matrix(c(0.4, 0.2, 0.1), ncol = 1)
+    cat("Using default phi coefficients\n")
+  }
+  
+  if (!is.null(model$theta)) {
+    theta <- model$theta
+    cat("Using ORIGINAL distance theta coefficients:\n")
+    print(theta[1:min(2, nrow(theta)), 1])
+  } else {
+    theta <- matrix(c(0.3, 0.15), ncol = 1)
+    cat("Using default theta coefficients\n")
+  }
 } else {
   phi <- matrix(c(0.4, 0.2, 0.1), ncol = 1)
-  cat("Using default phi coefficients\n")
-}
-
-if (exists("starima_uniform") && !is.null(starima_uniform$theta)) {
-  theta <- starima_uniform$theta
-  cat("Using ORIGINAL uniform theta coefficients:\n")
-  print(theta[1:min(2, nrow(theta)), 1])
-} else {
   theta <- matrix(c(0.3, 0.15), ncol = 1)
-  cat("Using default theta coefficients\n")
+  cat("Using default coefficients\n")
 }
 
 # Apply consistent scaling if coefficients are extreme
@@ -61,8 +70,8 @@ if (any(abs(phi) > 2.0, na.rm = TRUE) || any(abs(theta) > 2.0, na.rm = TRUE)) {
 
 cat("Phi range:", range(phi), "Theta range:", range(theta), "\n")
 
-# Spatial weights setup - UNIFORM
-W_matrix <- spatial_weights$uniform
+# Spatial weights setup - DISTANCE
+W_matrix <- spatial_weights$distance
 wlist <- list()
 wlist[[1]] <- diag(nrow(W_matrix))
 wlist[[2]] <- W_matrix
@@ -156,7 +165,7 @@ for (col in 1:ncol(Y)) {
     # Combine components
     forecast_val <- base_forecast + trend_component + ar_component + ma_component + seasonal_variation
     
-    # UNIFORM SAFETY MEASURES (Applied to ALL weight types)
+    # DISTANCE SAFETY MEASURES (Enhanced for distance-based weights)
     
     # 1. Bounds checking - prevent extreme forecasts
     forecast_val <- pmax(train_range[1] * 0.5, 
@@ -164,27 +173,27 @@ for (col in 1:ncol(Y)) {
     
     # 2. Extreme value detection and correction
     if (is.na(forecast_val) || is.infinite(forecast_val) || abs(forecast_val) > 20) {
-      cat("⚠️ Extreme forecast detected in Uniform, using base forecast\n")
+      cat("⚠️ Extreme forecast detected in Distance, using base forecast\n")
       forecast_val <- base_forecast
     }
     
     # 3. Explosive growth prevention
     if (t > 1 && abs(forecast_val) > abs(forecast_final[t-1, col]) * 3) {
-      cat("⚠️ Explosive growth detected in Uniform, dampening...\n")
+      cat("⚠️ Explosive growth detected in Distance, dampening...\n")
       forecast_val <- (forecast_val + base_forecast) / 2
     }
     
-    # 4. Additional stability check
-    if (t > 2 && abs(forecast_val - forecast_final[t-1, col]) > train_sd * 5) {
-      cat("⚠️ Large jump detected in Uniform, smoothing...\n")
-      forecast_val <- 0.7 * forecast_val + 0.3 * forecast_final[t-1, col]
+    # 4. Additional stability check for distance weights
+    if (t > 2 && abs(forecast_val - forecast_final[t-1, col]) > train_sd * 4) {
+      cat("⚠️ Large jump detected in Distance, smoothing...\n")
+      forecast_val <- 0.8 * forecast_val + 0.2 * forecast_final[t-1, col]
     }
     
     forecast_final[t, col] <- forecast_val
   }
 }
 
-# Apply spatial dependencies - UNIFORM weights
+# Apply spatial dependencies - DISTANCE weights (stronger spatial influence)
 for (t in 1:h) {
   spatial_effects <- matrix(0, nrow = 1, ncol = ncol(forecast_final))
   
@@ -196,11 +205,12 @@ for (t in 1:h) {
         weight <- wlist[[2]][col, neighbor]
         if (!is.na(weight) && weight > 0) {
           neighbor_val <- forecast_final[t, neighbor]
-          spatial_effect <- spatial_effect + weight * neighbor_val * 0.08
+          # Distance weights get stronger spatial influence
+          spatial_effect <- spatial_effect + weight * neighbor_val * 0.12
           
           # Safety check for spatial effect
-          if (abs(spatial_effect) > abs(forecast_final[t, col]) * 0.5) {
-            spatial_effect <- sign(spatial_effect) * abs(forecast_final[t, col]) * 0.5
+          if (abs(spatial_effect) > abs(forecast_final[t, col]) * 0.6) {
+            spatial_effect <- sign(spatial_effect) * abs(forecast_final[t, col]) * 0.6
           }
         }
       }
@@ -267,12 +277,12 @@ cat("📊 Test data range:", round(range(test_data), 2), "\n")
 # ============================================================================
 cat("\n📈 Evaluating in original scale...\n")
 
-region_eval_uniform <- data.frame(
+region_eval_distance <- data.frame(
   Region = colnames(test_data),
   MAE = NA_real_, 
   MSE = NA_real_, 
   RMSE = NA_real_,
-  Weight_Type = "Uniform"
+  Weight_Type = "Distance"
 )
 
 for (r in colnames(test_data)) {
@@ -285,21 +295,21 @@ for (r in colnames(test_data)) {
     mse_val <- mean((actual[valid_idx] - pred[valid_idx])^2)
     rmse_val <- sqrt(mse_val)
     
-    region_eval_uniform[region_eval_uniform$Region == r, c("MAE","MSE","RMSE")] <-
+    region_eval_distance[region_eval_distance$Region == r, c("MAE","MSE","RMSE")] <-
       round(c(mae_val, mse_val, rmse_val), 4)
   }
 }
 
-cat("✅ UNIFORM weights forecasting completed\n")
-print(region_eval_uniform)
+cat("✅ DISTANCE weights forecasting completed\n")
+print(region_eval_distance)
 
 # Save results
-results_uniform <- list(
+results_distance <- list(
   forecast_original_scale = forecast_original,      # Final forecast (original scale)
   forecast_transformed_scale = forecast_final,      # Intermediate forecast (differenced scale)
   forecast_undifferenced = forecast_undifferenced,  # After inverse differencing
-  metrics = region_eval_uniform,
-  weights = "uniform",
+  metrics = region_eval_distance,
+  weights = "distance",
   spatial_weights = wlist,
   transformation_info = list(
     used_differenced_matrix = TRUE,
@@ -308,8 +318,8 @@ results_uniform <- list(
   )
 )
 
-save(results_uniform, file = "output/15_forecast_uniform.RData")
-cat("💾 Results saved to: output/15_forecast_uniform.RData\n")
+save(results_distance, file = "output/15_forecast_distance.RData")
+cat("💾 Results saved to: output/15_forecast_distance.RData\n")
 cat("\n🎉 METHODOLOGICALLY CORRECT FORECASTING COMPLETED!\n")
 cat("✅ Training: differenced_matrix\n")
 cat("✅ Forecasting: differenced_matrix\n")

@@ -1,12 +1,12 @@
 # ============================================================================
-# STARIMA Model Evaluation - Uniform Weights Only
-# File   : 15_Compare_Uniform_Only.R
-# Purpose: Evaluasi hasil forecasting STARIMA dengan bobot uniform
+# STARIMA Model Evaluation - Distance Weights Only
+# File   : 16_Compare_Distance_Only.R
+# Purpose: Evaluasi hasil forecasting STARIMA dengan bobot distance
 # Author  : STARMA Analysis
 # Date    : 2025
 # ============================================================================
 
-cat("=== STARIMA FORECAST EVALUATION (UNIFORM WEIGHTS ONLY) ===\n\n")
+cat("=== STARIMA FORECAST EVALUATION (DISTANCE WEIGHTS ONLY) ===\n\n")
 
 # ----------------------------------------------------------------------------
 # Dependencies
@@ -22,25 +22,25 @@ for (p in req) {
 # ----------------------------------------------------------------------------
 # Load Forecast Results
 # ----------------------------------------------------------------------------
-if (!file.exists("output/15_forecast_uniform.RData")) {
-  stop("❌ Uniform forecast results not found. Run 1output/15_forecast_uniform.RData")
+if (!file.exists("output/15_forecast_distance.RData")) {
+  stop("❌ Distance forecast results not found. Run output/15_forecast_distance.RData")
 }
 
-load("output/15_forecast_uniform.RData")  # expected: results_uniform
+load("output/15_forecast_distance.RData")  # expected: results_distance
 load("output/03_data_split.RData")         # expected: test_data, test_time
 
-cat("✅ Uniform forecast results loaded successfully\n\n")
+cat("✅ Distance forecast results loaded successfully\n\n")
 
 # ----------------------------------------------------------------------------
 # Display Evaluation Metrics
 # ----------------------------------------------------------------------------
-cat("📊 MODEL PERFORMANCE METRICS (Uniform Weights)\n")
+cat("📊 MODEL PERFORMANCE METRICS (Distance Weights)\n")
 cat("==============================================\n")
 
-uniform_metrics <- results_uniform$metrics
-print(uniform_metrics)
+distance_metrics <- results_distance$metrics
+print(distance_metrics)
 
-summary_uniform <- uniform_metrics %>%
+summary_distance <- distance_metrics %>%
   summarise(
     Avg_MAE  = round(mean(MAE, na.rm = TRUE), 4),
     Avg_MSE  = round(mean(MSE, na.rm = TRUE), 4),
@@ -50,24 +50,24 @@ summary_uniform <- uniform_metrics %>%
   )
 
 cat("\n📈 SUMMARY STATISTICS:\n")
-print(summary_uniform)
+print(summary_distance)
 
 # ----------------------------------------------------------------------------
 # Visualization 1: RMSE per Region
 # ----------------------------------------------------------------------------
 if (!dir.exists("plots")) dir.create("plots")
 
-p1 <- ggplot(uniform_metrics, aes(x = Region, y = RMSE)) +
-  geom_col(fill = "#2E86DE", alpha = 0.8) +
+p1 <- ggplot(distance_metrics, aes(x = Region, y = RMSE)) +
+  geom_col(fill = "#E74C3C", alpha = 0.8) +
   geom_text(aes(label = round(RMSE, 3)), vjust = -0.4, size = 3) +
-  labs(title = "STARIMA Forecast Performance (Uniform Weights)",
+  labs(title = "STARIMA Forecast Performance (Distance Weights)",
        subtitle = "RMSE per Region (Lower is Better)",
        x = "Region", y = "RMSE") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(hjust = 0.5))
 
-ggsave("plots/15_uniform_rmse_per_region.png", p1, width = 10, height = 6, dpi = 300)
+ggsave("plots/16_distance_rmse_per_region.png", p1, width = 10, height = 6, dpi = 300)
 print(p1)
 
 # ----------------------------------------------------------------------------
@@ -76,7 +76,7 @@ print(p1)
 cat("\n📈 Generating forecast vs actual plots per region...\n")
 
 # Use the correct forecast data (original scale after inverse transformation)
-forecast_data <- results_uniform$forecast_original_scale
+forecast_data <- results_distance$forecast_original_scale
 
 # Debug: Check dimensions
 cat("📊 Debug info:\n")
@@ -108,16 +108,16 @@ for (region in colnames(test_data)) {
   p_region <- ggplot(df_plot, aes(x = Time)) +
     geom_line(aes(y = Actual), color = "black", size = 1.2, alpha = 0.8) +
     geom_point(aes(y = Actual), color = "black", size = 1.5) +
-    geom_line(aes(y = Forecast), color = "#2E86DE", linetype = "dashed", size = 1) +
-    geom_point(aes(y = Forecast), color = "#2E86DE", size = 1.5) +
+    geom_line(aes(y = Forecast), color = "#E74C3C", linetype = "dashed", size = 1) +
+    geom_point(aes(y = Forecast), color = "#E74C3C", size = 1.5) +
     labs(title = paste("Forecast vs Actual -", region),
-         subtitle = paste0("RMSE: ", round(uniform_metrics$RMSE[uniform_metrics$Region == region], 3)),
+         subtitle = paste0("RMSE: ", round(distance_metrics$RMSE[distance_metrics$Region == region], 3)),
          x = "Time", y = "Rainfall (standardized)") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5))
   
-  ggsave(paste0("plots/15_uniform_forecast_", region, ".png"), p_region, width = 10, height = 6, dpi = 300)
+  ggsave(paste0("plots/16_distance_forecast_", region, ".png"), p_region, width = 10, height = 6, dpi = 300)
   print(p_region)
 }
 
@@ -152,31 +152,31 @@ p_combined <- ggplot(all_long, aes(x = Time, y = Value, color = Type)) +
   geom_line(size = 1) +
   geom_point(size = 1.5) +
   facet_wrap(~Region, scales = "free_y", ncol = 2) +
-  labs(title = "STARIMA Forecast (Uniform Weights) - All Regions",
-       subtitle = "Black = Actual, Blue Dashed = Forecast",
+  labs(title = "STARIMA Forecast (Distance Weights) - All Regions",
+       subtitle = "Black = Actual, Red Dashed = Forecast",
        x = "Time", y = "Rainfall (standardized)") +
-  scale_color_manual(values = c("Actual" = "black", "Forecast" = "#2E86DE")) +
+  scale_color_manual(values = c("Actual" = "black", "Forecast" = "#E74C3C")) +
   theme_minimal() +
   theme(legend.position = "bottom",
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 
-ggsave("plots/15_uniform_forecast_all_regions.png", p_combined, width = 14, height = 10, dpi = 300)
+ggsave("plots/16_distance_forecast_all_regions.png", p_combined, width = 14, height = 10, dpi = 300)
 print(p_combined)
 
 # ----------------------------------------------------------------------------
 # Save Evaluation Summary
 # ----------------------------------------------------------------------------
-evaluation_uniform <- list(
-  metrics = uniform_metrics,
-  summary = summary_uniform,
+evaluation_distance <- list(
+  metrics = distance_metrics,
+  summary = summary_distance,
   forecast_original_scale = forecast_data,
-  forecast_all_scales = results_uniform,  # Keep all forecast scales
+  forecast_all_scales = results_distance,  # Keep all forecast scales
   test_data = test_data
 )
 
-save(evaluation_uniform, file = "output/15_uniform_evaluation.RData")
+save(evaluation_distance, file = "output/16_distance_evaluation.RData")
 
-cat("\n💾 Evaluation results saved → output/15_uniform_evaluation.RData\n")
+cat("\n💾 Evaluation results saved → output/16_distance_evaluation.RData\n")
 cat("📊 Plots saved in folder → plots/\n")
-cat("✅ STARIMA (Uniform) evaluation completed successfully!\n")
+cat("✅ STARIMA (Distance) evaluation completed successfully!\n")
