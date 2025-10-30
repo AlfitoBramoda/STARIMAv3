@@ -1,6 +1,6 @@
 # ============================================================================
 # STARIMA Model Evaluation - Uniform Weights Only
-# File   : 15_Compare_Uniform_Only.R
+# File   : 16_Compare_Uniform_Only.R
 # Purpose: Evaluasi hasil forecasting STARIMA dengan bobot uniform
 # Author  : STARMA Analysis
 # Date    : 2025
@@ -23,7 +23,7 @@ for (p in req) {
 # Load Forecast Results
 # ----------------------------------------------------------------------------
 if (!file.exists("output/15_forecast_uniform.RData")) {
-  stop("❌ Uniform forecast results not found. Run 1output/15_forecast_uniform.RData")
+  stop("❌ Uniform forecast results not found. Run output/15_forecast_uniform.RData")
 }
 
 load("output/15_forecast_uniform.RData")  # expected: results_uniform
@@ -67,7 +67,7 @@ p1 <- ggplot(uniform_metrics, aes(x = Region, y = RMSE)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(hjust = 0.5))
 
-ggsave("plots/15_uniform_rmse_per_region.png", p1, width = 10, height = 6, dpi = 300)
+ggsave("plots/16_uniform_rmse_per_region.png", p1, width = 10, height = 6, dpi = 300)
 print(p1)
 
 # ----------------------------------------------------------------------------
@@ -117,7 +117,7 @@ for (region in colnames(test_data)) {
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5))
   
-  ggsave(paste0("plots/15_uniform_forecast_", region, ".png"), p_region, width = 10, height = 6, dpi = 300)
+  ggsave(paste0("plots/16_uniform_forecast_", region, ".png"), p_region, width = 10, height = 6, dpi = 300)
   print(p_region)
 }
 
@@ -161,7 +161,7 @@ p_combined <- ggplot(all_long, aes(x = Time, y = Value, color = Type)) +
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 
-ggsave("plots/15_uniform_forecast_all_regions.png", p_combined, width = 14, height = 10, dpi = 300)
+ggsave("plots/16_uniform_forecast_all_regions.png", p_combined, width = 14, height = 10, dpi = 300)
 print(p_combined)
 
 # ----------------------------------------------------------------------------
@@ -175,8 +175,8 @@ evaluation_uniform <- list(
   test_data = test_data
 )
 
-save(evaluation_uniform, file = "output/15_uniform_evaluation.RData")
+save(evaluation_uniform, file = "output/16_uniform_evaluation.RData")
 
-cat("\n💾 Evaluation results saved → output/15_uniform_evaluation.RData\n")
+cat("\n💾 Evaluation results saved → output/16_uniform_evaluation.RData\n")
 cat("📊 Plots saved in folder → plots/\n")
 cat("✅ STARIMA (Uniform) evaluation completed successfully!\n")

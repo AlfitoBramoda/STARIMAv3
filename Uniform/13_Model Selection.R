@@ -1,12 +1,10 @@
 # ============================================================================
 # STARMA Forecasting Pipeline - Phase 4: Model Selection (Uniform Only)
-# File: 12_Model_Selection_UniformOnly.R
+# File: 13_Model_Selection_Uniform.R
 # Purpose: Evaluate and finalize STARIMA model using Uniform spatial weights
 # Author: STARMA Analysis
 # Date: 2024
 # ============================================================================
-
-cat("=== STARIMA MODEL SELECTION (UNIFORM ONLY) ===\n\n")
 
 # ============================================================================
 # LOAD REQUIRED DATA
@@ -18,6 +16,15 @@ library(starma)
 library(ggplot2)
 library(gridExtra)
 
+# Extract dynamic model orders
+p_order <- uniform_results$orders$p
+d_order <- uniform_results$orders$d
+q_order <- uniform_results$orders$q
+model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+
+cat("=== STARIMA MODEL SELECTION (UNIFORM ONLY) ===\n\n")
+cat(sprintf("📋 Evaluating: %s - Uniform Weights\n\n", model_name))
+
 # ============================================================================
 # MODEL FIT STATISTICS
 # ============================================================================
@@ -27,19 +34,19 @@ cat("==========================================\n")
 uniform_stats <- uniform_results$fit_statistics
 
 model_summary <- data.frame(
-  Model = "STARIMA(1,1,1)",
+  Model = model_name,
   Spatial_Weight_Type = "Uniform (Equal Weights)",
   Log_Likelihood = round(uniform_stats$loglik, 4),
   AIC = round(uniform_stats$aic, 2),
   BIC = round(uniform_stats$bic, 2),
   Parameters = uniform_stats$parameters,
-  Observations = 96,
+  Observations = uniform_stats$observations,
   stringsAsFactors = FALSE
 )
 
 print(model_summary)
 
-cat("\n✅ STARIMA(31,1,1) model evaluated successfully.\n")
+cat(sprintf("\n✅ %s model evaluated successfully.\n", model_name))
 
 # ============================================================================
 # PARAMETER SIGNIFICANCE
@@ -110,7 +117,7 @@ cat("- Significance agreement: 100%\n")
 cat("\n🏆 Model Selection Decision:\n")
 cat("================================\n")
 
-cat("📊 Final Model Selected: STARIMA(3,1,5) — Uniform Spatial Weights\n")
+cat(sprintf("📊 Final Model Selected: %s — Uniform Spatial Weights\n", model_name))
 cat("✔️ Based on lowest AIC/BIC and significant parameters\n")
 cat("✔️ Diagnostics confirm model adequacy\n")
 
@@ -121,7 +128,7 @@ selection_summary <- data.frame(
     round(uniform_stats$bic, 2),
     round(uniform_stats$loglik, 4),
     "All satisfactory",
-    "✅ STARIMA(31,1,1) - Uniform"
+    sprintf("✅ %s - Uniform", model_name)
   ),
   stringsAsFactors = FALSE
 )
@@ -137,7 +144,7 @@ cat("\n📊 Creating Summary Visualization...\n")
 fit_plot <- ggplot(model_summary, aes(x = Model, y = AIC, fill = Spatial_Weight_Type)) +
   geom_col(alpha = 0.7) +
   labs(title = "STARIMA Model Fit (Uniform Weights)",
-       subtitle = "AIC and BIC summary for STARIMA(3,1,5)",
+       subtitle = sprintf("AIC and BIC summary for %s", model_name),
        x = "Model", y = "AIC Value") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5),
@@ -164,7 +171,7 @@ model_selection_results <- list(
   param_consistency = param_consistency,
   selection_summary = selection_summary,
   selected_model = list(
-    name = "STARIMA(1,1,1) - Uniform Weights",
+    name = sprintf("%s - Uniform Weights", model_name),
     object = uniform_results$model,
     results = uniform_results,
     diagnostics = get0("diag_results", ifnotfound = NULL)
@@ -174,6 +181,6 @@ model_selection_results <- list(
 save(model_selection_results, file = "output/13_model_selection_uniform.RData")
 
 cat("\n=== MODEL SELECTION COMPLETED (UNIFORM ONLY) ===\n")
-cat("✅ STARIMA(31,1,1) - Uniform model finalized successfully\n")
+cat(sprintf("✅ %s - Uniform model finalized successfully\n", model_name))
 cat("✅ Results saved to: output/13_model_selection_uniform.RData\n")
 cat("🎯 Ready for Phase 5: STARIMA Forecasting\n")

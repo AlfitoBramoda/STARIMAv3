@@ -1,7 +1,7 @@
 # ============================================================================
-# STARMA Forecasting Pipeline - Phase 3: STARIMA Estimation (Looped Final)
-# File: 09_Model_Structure_Looped_Final.R
-# Purpose: Create AR/MA mask matrices for all weight types + plotting ACF-style
+# STARMA Forecasting Pipeline - Phase 3: STARIMA Estimation (Uniform Final)
+# File: 10_Model_Structure_Uniform_Final.R
+# Purpose: Create AR/MA mask matrices for uniform weight type + plotting ACF-style
 # Author: STARMA Analysis
 # Date: 2024
 # ============================================================================
@@ -14,7 +14,7 @@ load("output/05_differencing_results.RData")
 
 library(ggplot2)
 
-cat("=== STARMA MODEL STRUCTURE DEFINITION (ALL WEIGHTS) ===\n\n")
+cat("=== STARMA MODEL STRUCTURE DEFINITION (UNIFORM WEIGHTS) ===\n\n")
 
 # ============================================================================
 # CONFIGURATION
@@ -24,7 +24,7 @@ max_spatial_lag <- 2     # Maximum spatial lag (from spatial weights)
 d_order <- 1             # Non-seasonal differencing
 D_order <- 1             # Seasonal differencing applied
 seasonal_period <- 12    # Seasonal period (e.g., 12 months)
-n_observations <- 96    # Jumlah observasi training
+n_observations <- 96     # Jumlah observasi training
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -80,102 +80,98 @@ create_mask_plot <- function(mask_matrix, title) {
 }
 
 # ============================================================================
-# LOOP OVER ALL WEIGHTS
+# PROCESS UNIFORM WEIGHTS
 # ============================================================================
-weight_types <- c("uniform", "distance", "correlation")
+weight_type <- "uniform"
 model_structures <- list()
 plots <- list()
 
-for (w in weight_types) {
-  cat("\n📊 Processing weight type:", w, "\n")
-  
-  ar_obj <- NULL
-  ma_obj <- NULL
-  
-  tryCatch({
-    ar_obj <- get(paste0(w, "_ar"), envir = .GlobalEnv)
-  }, error = function(e) {
-    cat("⚠️ Warning:", paste0(w, "_ar"), "not found, using default\n")
-  })
-  
-  tryCatch({
-    ma_obj <- get(paste0(w, "_ma"), envir = .GlobalEnv)
-  }, error = function(e) {
-    cat("⚠️ Warning:", paste0(w, "_ma"), "not found, using default\n")
-  })
-  
-  # Load identification results for correct orders
-  if (file.exists("output/09_stpacf_uniform_only.RData")) {
-    load("output/09_stpacf_uniform_only.RData")
-    p_order <- uniform_ar$suggested_p      # 3 (from STPACF)
-    q_order <- uniform_ma$suggested_q      # 5 (from STACF)
-  } else {
-    p_order <- 3; q_order <- 5  # Use STARIMA(3,1,5) as identified
-  }
-  
-  # Calculate parameters with correct orders
-  max_spatial_lag <- 2
-  ar_mask <- matrix(1, nrow = max_spatial_lag + 1, ncol = p_order)  # 3x3
-  ma_mask <- matrix(1, nrow = max_spatial_lag + 1, ncol = q_order)  # 3x5
-  
-  
-  cat("- AR order (p):", p_order, "\n")
-  cat("- MA order (q):", q_order, "\n")
-  
-  ar_mask <- create_ar_mask(p_order, max_spatial_lag)
-  ma_mask <- create_ma_mask(q_order, max_spatial_lag)
-  
-  total_ar_params <- sum(ar_mask)
-  total_ma_params <- sum(ma_mask)
-  total_params <- total_ar_params + total_ma_params
-  complexity_ratio <- total_params / n_observations
-  parsimony_score <- n_observations / total_params
-  df <- n_observations - total_params
-  complexity_level <- if (complexity_ratio < 0.1) "LOW" else if (complexity_ratio < 0.2) "MODERATE" else "HIGH"
-  df_assessment <- if (df > 50) "SUFFICIENT" else if (df > 20) "ADEQUATE" else "LIMITED"
-  
-  # ===== Tambahan Integration Info =====
-  integration_info <- list(
-    d = d_order,
-    D = D_order,
-    seasonal_period = seasonal_period,
-    differencing_type = if (D_order > 0) "SEASONAL" else if (d_order > 0) "NON-SEASONAL" else "NONE"
-  )
-  
-  # Simpan struktur model
-  model_structures[[w]] <- list(
-    ar_mask = ar_mask,
-    ma_mask = ma_mask,
-    ar_order = p_order,
-    ma_order = q_order,
-    total_ar_params = total_ar_params,
-    total_ma_params = total_ma_params,
-    total_params = total_params,
-    complexity_ratio = complexity_ratio,
-    parsimony_score = parsimony_score,
-    df = df,
-    complexity_level = complexity_level,
-    df_assessment = df_assessment,
-    integration_order = integration_info   # <— DITAMBAHKAN DI SINI
-  )
-  
-  # Buat plot mask
-  ar_plot_result <- create_mask_plot(ar_mask, paste0(w, " AR Mask"))
-  ma_plot_result <- create_mask_plot(ma_mask, paste0(w, " MA Mask"))
-  plots[[paste0(w, "_AR")]] <- ar_plot_result
-  plots[[paste0(w, "_MA")]] <- ma_plot_result
-  
-  cat("- Total parameters:", total_params, "\n")
-  cat("- Complexity level:", complexity_level, "\n")
-  cat("- Degrees of freedom:", df, "(", df_assessment, ")\n")
+cat("\n📊 Processing weight type:", weight_type, "\n")
+
+ar_obj <- NULL
+ma_obj <- NULL
+
+tryCatch({
+  ar_obj <- get(paste0(weight_type, "_ar"), envir = .GlobalEnv)
+}, error = function(e) {
+  cat("⚠️ Warning:", paste0(weight_type, "_ar"), "not found, using default\n")
+})
+
+tryCatch({
+  ma_obj <- get(paste0(weight_type, "_ma"), envir = .GlobalEnv)
+}, error = function(e) {
+  cat("⚠️ Warning:", paste0(weight_type, "_ma"), "not found, using default\n")
+})
+
+# Load identification results for correct orders
+if (file.exists("output/09_stpacf_uniform_only.RData")) {
+  load("output/09_stpacf_uniform_only.RData")
+  p_order <- uniform_ar$suggested_p      # from STPACF
+  q_order <- uniform_ma$suggested_q      # from STACF
+} else {
+  p_order <- 3; q_order <- 3  # Use STARIMA(3,1,3) as default
 }
 
-# ============================================================================
-# SIMPAN HASIL
-# ============================================================================
-save(model_structures, plots, file = "output/09_model_structure_all_weights.RData")
+# Calculate parameters with correct orders
+max_spatial_lag <- 2
+ar_mask <- matrix(1, nrow = max_spatial_lag + 1, ncol = p_order)  # 3x3
+ma_mask <- matrix(1, nrow = max_spatial_lag + 1, ncol = q_order)  # 3x3
 
-cat("\n✅ STARIMA model structures for all weights saved to 'output/09_model_structure_all_weights.RData'\n")
-cat("✅ Integration orders (d, D) added to each model\n")
-cat("🎯 Ready for STARIMA estimation for all weight types\n")
+cat("- AR order (p):", p_order, "\n")
+cat("- MA order (q):", q_order, "\n")
 
+ar_mask <- create_ar_mask(p_order, max_spatial_lag)
+ma_mask <- create_ma_mask(q_order, max_spatial_lag)
+
+total_ar_params <- sum(ar_mask)
+total_ma_params <- sum(ma_mask)
+total_params <- total_ar_params + total_ma_params
+complexity_ratio <- total_params / n_observations
+parsimony_score <- n_observations / total_params
+df <- n_observations - total_params
+complexity_level <- if (complexity_ratio < 0.1) "LOW" else if (complexity_ratio < 0.2) "MODERATE" else "HIGH"
+df_assessment <- if (df > 50) "SUFFICIENT" else if (df > 20) "ADEQUATE" else "LIMITED"
+
+# ===== Integration Info =====
+integration_info <- list(
+  d = d_order,
+  D = D_order,
+  seasonal_period = seasonal_period,
+  differencing_type = if (D_order > 0) "SEASONAL" else if (d_order > 0) "NON-SEASONAL" else "NONE"
+)
+
+# Simpan struktur model
+model_structures[[weight_type]] <- list(
+  ar_mask = ar_mask,
+  ma_mask = ma_mask,
+  ar_order = p_order,
+  ma_order = q_order,
+  total_ar_params = total_ar_params,
+  total_ma_params = total_ma_params,
+  total_params = total_params,
+  complexity_ratio = complexity_ratio,
+  parsimony_score = parsimony_score,
+  df = df,
+  complexity_level = complexity_level,
+  df_assessment = df_assessment,
+  integration_order = integration_info
+)
+
+# Buat plot mask
+ar_plot_result <- create_mask_plot(ar_mask, paste0(weight_type, " AR Mask"))
+ma_plot_result <- create_mask_plot(ma_mask, paste0(weight_type, " MA Mask"))
+plots[[paste0(weight_type, "_AR")]] <- ar_plot_result
+plots[[paste0(weight_type, "_MA")]] <- ma_plot_result
+
+cat("- Total parameters:", total_params, "\n")
+cat("- Complexity level:", complexity_level, "\n")
+cat("- Degrees of freedom:", df, "(", df_assessment, ")\n")
+
+# ============================================================================
+# SAVE RESULTS
+# ============================================================================
+save(model_structures, plots, file = "output/10_model_structure_uniform_weights.RData")
+
+cat("\n✅ STARIMA model structure for uniform weights saved to 'output/10_model_structure_uniform_weights.RData'\n")
+cat("✅ Integration orders (d, D) added to model\n")
+cat("🎯 Ready for STARIMA estimation for uniform weight type\n")

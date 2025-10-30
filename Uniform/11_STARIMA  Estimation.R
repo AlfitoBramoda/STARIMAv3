@@ -1,7 +1,7 @@
 # ============================================================================
 # STARMA Forecasting Pipeline - Phase 3: STARIMA Estimation
-# File   : 10a_STARIMA_Estimation_Uniform.R
-# Purpose: Estimate STARIMA(2,1,2) model using uniform spatial weights
+# File   : 11_STARIMA_Estimation_Uniform.R
+# Purpose: Estimate STARIMA(p,d,q) model using uniform spatial weights
 # Author : STARMA Analysis
 # Date   : 2024
 # ============================================================================
@@ -40,16 +40,24 @@ if (!exists("spatial_weights") || is.null(spatial_weights$uniform)) halt("'spati
 data_input <- differenced_matrix   # gunakan hasil differencing
 d_order <- 1
 
-# ------------------------------ Model Orders --------------------------------
-p_order <- 2
-q_order <- 2
-max_spatial_lag <- 1
+# ------------------------------ Model Orders (EXPERIMENT HERE!) --------------------------------
+# 🧪 CHANGE THESE VALUES TO EXPERIMENT WITH DIFFERENT ORDERS:
+p_order <- 3          # AR order (try: 1, 2, 3, 4)
+q_order <- 2          # MA order (try: 1, 2, 3)
+max_spatial_lag <- 1  # Spatial lags (usually keep at 1)
+
+# 📊 Popular combinations to try:
+# STARIMA(1,1,1) - Simple model
+# STARIMA(2,1,2) - Balanced model  
+# STARIMA(3,1,1) - AR-heavy model
+# STARIMA(1,1,3) - MA-heavy model
+# STARIMA(3,1,2) - Complex model
 
 cat("=== STARIMA ESTIMATION - UNIFORM WEIGHTS ===\n\n")
 cat("📋 Estimation Setup:\n")
 cat("===================\n")
 cat(sprintf("- Model: STARIMA(%d,%d,%d)\n", p_order, d_order, q_order))
-cat("- Spatial weights: Uniform\n")
+cat("- Spatial weights: Uniform-based\n")
 cat(sprintf("- Training data: %d observations\n", nrow(data_input)))
 cat(sprintf("- Regions: %d (%s)\n", ncol(data_input),
             paste(head(colnames(data_input) %nz% paste0("Region_", seq_len(ncol(data_input)))), collapse=", ")))
@@ -72,19 +80,33 @@ for (i in seq_along(wlist_uniform)) {
 
 ok("Spatial weights list constructed with ", length(wlist_uniform), " lags")
 
-# ------------------------------ Masks (AR/MA) --------------------------------
-# ------------------------------ Masks (AR/MA) --------------------------------
-# Gunakan hanya lag yang signifikan berdasarkan hasil STACF/STPACF
-ar_mask <- matrix(FALSE, 2, 2)
-ma_mask <- matrix(FALSE, 2, 2)
-ar_mask[1,1] <- TRUE  # tlag1-slag0
-ar_mask[2,1] <- TRUE  # tlag2-slag0
-ma_mask[1,1] <- TRUE  # tlag1-slag0
-ma_mask[2,1] <- TRUE  # tlag2-slag0
+# ------------------------------ Dynamic Masks (AR/MA) --------------------------------
+# Create masks dynamically based on p_order and q_order
+ar_mask <- matrix(FALSE, p_order, max_spatial_lag + 1)
+ma_mask <- matrix(FALSE, q_order, max_spatial_lag + 1)
 
-ok(sprintf("AR mask: %dx%d | MA mask: %dx%d",
-           nrow(ar_mask), ncol(ar_mask), nrow(ma_mask), ncol(ma_mask)))
+# Activate all temporal lags for spatial lag 0 (within-region effects)
+for (p in 1:p_order) {
+  ar_mask[p, 1] <- TRUE  # tlag_p-slag0
+}
+for (q in 1:q_order) {
+  ma_mask[q, 1] <- TRUE  # tlag_q-slag0
+}
 
+# Optional: Activate some spatial lags (uncomment if needed)
+# ar_mask[1, 2] <- TRUE  # tlag1-slag1 (first AR lag with spatial lag 1)
+# ma_mask[1, 2] <- TRUE  # tlag1-slag1 (first MA lag with spatial lag 1)
+
+cat("🎯 Dynamic Mask Configuration:\n")
+cat(sprintf("- AR mask: %dx%d (p=%d, spatial_lags=%d)\n", 
+           nrow(ar_mask), ncol(ar_mask), p_order, max_spatial_lag))
+cat(sprintf("- MA mask: %dx%d (q=%d, spatial_lags=%d)\n", 
+           nrow(ma_mask), ncol(ma_mask), q_order, max_spatial_lag))
+cat(sprintf("- Total AR parameters: %d\n", sum(ar_mask)))
+cat(sprintf("- Total MA parameters: %d\n", sum(ma_mask)))
+cat(sprintf("- Total parameters: %d\n\n", sum(ar_mask) + sum(ma_mask)))
+
+ok("Dynamic masks created successfully")
 
 # ----------------------------- Data Hygiene ----------------------------------
 na_rows <- which(!stats::complete.cases(data_input))

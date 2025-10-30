@@ -1,12 +1,10 @@
 # ============================================================================
 # STARMA Forecasting Pipeline - Phase 4: Model Selection (Distance Only)
-# File: 13_Model_Selection_DistanceOnly.R
+# File: 13_Model_Selection_Distance.R
 # Purpose: Evaluate and finalize STARIMA model using Distance spatial weights
 # Author: STARMA Analysis
 # Date: 2024
 # ============================================================================
-
-cat("=== STARIMA MODEL SELECTION (DISTANCE ONLY) ===\n\n")
 
 # ============================================================================
 # LOAD REQUIRED DATA
@@ -18,6 +16,15 @@ library(starma)
 library(ggplot2)
 library(gridExtra)
 
+# Extract dynamic model orders
+p_order <- distance_results$orders$p
+d_order <- distance_results$orders$d
+q_order <- distance_results$orders$q
+model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+
+cat("=== STARIMA MODEL SELECTION (DISTANCE ONLY) ===\n\n")
+cat(sprintf("📋 Evaluating: %s - Distance Weights\n\n", model_name))
+
 # ============================================================================
 # MODEL FIT STATISTICS
 # ============================================================================
@@ -27,19 +34,19 @@ cat("==========================================\n")
 distance_stats <- distance_results$fit_statistics
 
 model_summary <- data.frame(
-  Model = "STARIMA(2,1,2)",
+  Model = model_name,
   Spatial_Weight_Type = "Distance-Based (Inverse Distance)",
   Log_Likelihood = round(distance_stats$loglik, 4),
   AIC = round(distance_stats$aic, 2),
   BIC = round(distance_stats$bic, 2),
   Parameters = distance_stats$parameters,
-  Observations = 96,
+  Observations = distance_stats$observations,
   stringsAsFactors = FALSE
 )
 
 print(model_summary)
 
-cat("\n✅ STARIMA(2,1,2) model evaluated successfully.\n")
+cat(sprintf("\n✅ %s model evaluated successfully.\n", model_name))
 
 # ============================================================================
 # PARAMETER SIGNIFICANCE
@@ -114,7 +121,7 @@ cat("- Significance agreement: 100%\n")
 cat("\n🏆 Model Selection Decision:\n")
 cat("================================\n")
 
-cat("📊 Final Model Selected: STARIMA(2,1,2) — Distance-Based Spatial Weights\n")
+cat(sprintf("📊 Final Model Selected: %s — Distance-Based Spatial Weights\n", model_name))
 cat("✔️ Based on lowest AIC/BIC and significant parameters\n")
 cat("✔️ Diagnostics confirm model adequacy\n")
 
@@ -125,7 +132,7 @@ selection_summary <- data.frame(
     round(distance_stats$bic, 2),
     round(distance_stats$loglik, 4),
     "All satisfactory",
-    "✅ STARIMA(2,1,2) - Distance"
+    sprintf("✅ %s - Distance", model_name)
   ),
   stringsAsFactors = FALSE
 )
@@ -141,7 +148,7 @@ cat("\n📊 Creating Summary Visualization...\n")
 fit_plot <- ggplot(model_summary, aes(x = Model, y = AIC, fill = Spatial_Weight_Type)) +
   geom_col(alpha = 0.7) +
   labs(title = "STARIMA Model Fit (Distance Weights)",
-       subtitle = "AIC and BIC summary for STARIMA(2,1,2)",
+       subtitle = sprintf("AIC and BIC summary for %s", model_name),
        x = "Model", y = "AIC Value") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5),
@@ -168,7 +175,7 @@ model_selection_results <- list(
   param_consistency = param_consistency,
   selection_summary = selection_summary,
   selected_model = list(
-    name = "STARIMA(2,1,2) - Distance Weights",
+    name = sprintf("%s - Distance Weights", model_name),
     object = distance_results$model,
     results = distance_results,
     diagnostics = diagnostic_results
@@ -178,6 +185,6 @@ model_selection_results <- list(
 save(model_selection_results, file = "output/13_model_selection_distance.RData")
 
 cat("\n=== MODEL SELECTION COMPLETED (DISTANCE ONLY) ===\n")
-cat("✅ STARIMA(2,1,2) - Distance model finalized successfully\n")
+cat(sprintf("✅ %s - Distance model finalized successfully\n", model_name))
 cat("✅ Results saved to: output/13_model_selection_distance.RData\n")
 cat("🎯 Ready for Phase 5: STARIMA Forecasting\n")

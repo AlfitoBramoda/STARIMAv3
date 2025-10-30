@@ -4,7 +4,17 @@
 # Purpose: Forecast dengan pembobotan Distance-based
 # ============================================================================
 
-cat("=== STARIMA FORECASTING - DISTANCE WEIGHTS ===\n\n")
+# Extract dynamic model orders from results
+if (exists("distance_results") && !is.null(distance_results$orders)) {
+  p_order <- distance_results$orders$p
+  d_order <- distance_results$orders$d
+  q_order <- distance_results$orders$q
+  model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+} else {
+  model_name <- "STARIMA(2,1,2)"  # fallback
+}
+
+cat(sprintf("=== %s FORECASTING - DISTANCE WEIGHTS ===\n\n", model_name))
 
 # Set seed for reproducible results
 set.seed(12345)
@@ -198,7 +208,7 @@ if (exists("distance_results") && !is.null(distance_results$model)) {
     # Dynamic STARIMA implementation
     p_actual <- length(phi_coefs)
     q_actual <- length(theta_coefs)
-    cat("🔧 Implementing full STARIMA(", p_actual, ",1,", q_actual, ") manually...\n")
+    cat(sprintf("🔧 Implementing full STARIMA(%d,1,%d) manually...\n", p_actual, q_actual))
     
     # CRITICAL: Create completely new matrix to avoid assignment issues
     starima_forecast <- array(0, dim = c(h, ncol(Y)))
@@ -477,7 +487,7 @@ for (r in colnames(test_data)) {
   }
 }
 
-cat("✅ DISTANCE weights forecasting completed\n")
+cat(sprintf("✅ %s - DISTANCE weights forecasting completed\n", model_name))
 print(region_eval_distance)
 
 # Save results
