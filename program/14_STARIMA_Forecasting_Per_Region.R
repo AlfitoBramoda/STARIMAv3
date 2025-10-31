@@ -43,6 +43,10 @@ load("output/06_data_split.RData")         # train_data, test_data, train_time, 
 load("output/05_spatial_weights.RData")    # spatial_weights
 load("output/09_model_structure.RData")    # p_order, d_order, q_order
 
+# p_order <- 2
+# d_order <- 1
+# q_order <- 3
+
 cat("Artifacts loaded successfully.\n")
 cat("- p,d,q = ", p_order,",", d_order,",", q_order, "\n", sep="")
 
