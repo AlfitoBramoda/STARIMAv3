@@ -42,8 +42,8 @@ d_order <- 1
 
 # ------------------------------ Model Orders (EXPERIMENT HERE!) --------------------------------
 # 🧪 CHANGE THESE VALUES TO EXPERIMENT WITH DIFFERENT ORDERS:
-p_order <- 1          # AR order (try: 1, 2, 3, 4)
-q_order <- 2          # MA order (try: 1, 2, 3)
+p_order <- 4          # AR order (try: 1, 2, 3, 4)
+q_order <- 5          # MA order (reduced for better significance)
 max_spatial_lag <- 1  # Spatial lags (usually keep at 1)
 
 # 📊 Popular combinations to try:
@@ -85,7 +85,7 @@ ok("Spatial weights list constructed with ", length(wlist_uniform), " lags")
 ar_mask <- matrix(FALSE, p_order, max_spatial_lag + 1)
 ma_mask <- matrix(FALSE, q_order, max_spatial_lag + 1)
 
-# Activate all temporal lags for spatial lag 0 (within-region effects)
+# Activate temporal lags for spatial lag 0 (within-region effects)
 for (p in 1:p_order) {
   ar_mask[p, 1] <- TRUE  # tlag_p-slag0
 }
@@ -93,9 +93,17 @@ for (q in 1:q_order) {
   ma_mask[q, 1] <- TRUE  # tlag_q-slag0
 }
 
-# Optional: Activate some spatial lags (uncomment if needed)
-# ar_mask[1, 2] <- TRUE  # tlag1-slag1 (first AR lag with spatial lag 1)
-# ma_mask[1, 2] <- TRUE  # tlag1-slag1 (first MA lag with spatial lag 1)
+# UNIFORM WEIGHTS: Fully dynamic spatial lags activation
+if (max_spatial_lag >= 1) {
+  # Activate spatial lags for all AR orders
+  for (p in 1:min(p_order, 2)) {  # Limit to first 2 AR lags for stability
+    ar_mask[p, 2] <- TRUE  # tlag_p-slag1
+  }
+  # Activate spatial lags for first MA order only (for parsimony)
+  if (q_order >= 1) {
+    ma_mask[1, 2] <- TRUE  # tlag1-slag1
+  }
+}
 
 cat("🎯 Dynamic Mask Configuration:\n")
 cat(sprintf("- AR mask: %dx%d (p=%d, spatial_lags=%d)\n", 
