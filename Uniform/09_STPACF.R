@@ -59,32 +59,61 @@ tryCatch({
 })
 
 # -------------------------------
-# PACF-STYLE PLOT (like ARIMA)
+# PACF-STYLE PLOT (SEPARATE PLOTS FOR EACH SPATIAL LAG)
 # -------------------------------
-cat("\n📊 Creating PACF-style STPACF plot (Uniform weights)...\n")
+cat("\n📊 Creating PACF-style STPACF plots (Uniform weights)...\n")
+library(gridExtra)
 
-temporal_pacf <- stpacf_uniform[, 1]  # Spatial lag 0
 n <- nrow(differenced_matrix)
 conf_bound <- 1.96 / sqrt(n)
 
-pacf_df <- data.frame(
-  Lag = 1:length(temporal_pacf),
-  PACF = temporal_pacf
+# Plot 1: Spatial Lag 0 (Within-region effects)
+temporal_pacf_slag0 <- stpacf_uniform[, 1]
+pacf_df_slag0 <- data.frame(
+  Lag = 1:length(temporal_pacf_slag0),
+  PACF = temporal_pacf_slag0
 )
 
-p <- ggplot(pacf_df, aes(x = Lag, y = PACF)) +
+p1 <- ggplot(pacf_df_slag0, aes(x = Lag, y = PACF)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = c(conf_bound, -conf_bound), color = "blue", linetype = "dashed") +
+  geom_segment(aes(xend = Lag, yend = 0), color = "darkblue", size = 1) +
+  geom_point(color = "darkblue", size = 2) +
+  labs(title = "STPACF: Uniform Weights - Spatial Lag 0",
+       subtitle = "Within-region effects (Identity matrix)",
+       x = "Temporal Lag", y = "Partial Autocorrelation") +
+  theme_minimal()
+
+# Plot 2: Spatial Lag 1 (Neighbor effects)
+temporal_pacf_slag1 <- stpacf_uniform[, 2]
+pacf_df_slag1 <- data.frame(
+  Lag = 1:length(temporal_pacf_slag1),
+  PACF = temporal_pacf_slag1
+)
+
+p2 <- ggplot(pacf_df_slag1, aes(x = Lag, y = PACF)) +
   geom_hline(yintercept = 0, color = "black") +
   geom_hline(yintercept = c(conf_bound, -conf_bound), color = "blue", linetype = "dashed") +
   geom_segment(aes(xend = Lag, yend = 0), color = "darkred", size = 1) +
   geom_point(color = "darkred", size = 2) +
-  labs(title = "STPACF (PACF-style): Uniform Weights",
-       subtitle = paste("Temporal lags (spatial lag 0) - n =", n),
+  labs(title = "STPACF: Uniform Weights - Spatial Lag 1",
+       subtitle = "Neighbor effects (Uniform matrix)",
        x = "Temporal Lag", y = "Partial Autocorrelation") +
   theme_minimal()
 
-ggsave("plots/08_stpacf_uniform_pacf.png", p, width = 10, height = 6, dpi = 300)
-print(p)
-cat("✅ PACF-style plot saved: plots/08_stpacf_uniform_pacf.png\n")
+# Combine plots
+combined_pacf_plot <- grid.arrange(p1, p2, ncol = 2)
+
+# Save individual plots
+ggsave("plots/09_stpacf_uniform_slag0.png", p1, width = 10, height = 6, dpi = 300)
+ggsave("plots/09_stpacf_uniform_slag1.png", p2, width = 10, height = 6, dpi = 300)
+
+# Save combined plot
+ggsave("plots/09_stpacf_uniform_combined.png", combined_pacf_plot, width = 16, height = 6, dpi = 300)
+
+print(p1)
+print(p2)
+cat("✅ PACF-style plots saved: slag0, slag1, and combined versions\n")
 
 # ============================================================================
 # AR ORDER RECOMMENDATION (Uniform Only)
@@ -173,4 +202,5 @@ save(stpacf_uniform, uniform_ar, uniform_ma, differenced_matrix,
 
 cat("\n✅ STPACF analysis (Uniform only) completed successfully!\n")
 cat("✅ Results saved: output/09_stpacf_uniform_only.RData\n")
+cat("📊 Plots saved: slag0, slag1, and combined versions\n")
 cat("📁 Ready for Phase 3: STARIMA Estimation\n")

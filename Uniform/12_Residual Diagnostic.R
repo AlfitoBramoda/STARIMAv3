@@ -196,6 +196,128 @@ print(pacf_plot)
 print(qq_plot)
 
 # ============================================================================
+# RESIDUAL STACF/STPACF ANALYSIS (SPATIAL LAG 0 & 1)
+# ============================================================================
+cat("\n📊 Residual STACF/STPACF Analysis:\n")
+
+# Create spatial weights list for residual analysis
+wlist_residual <- list()
+wlist_residual[[1]] <- diag(nrow(W))  # Spatial lag 0 (Identity)
+wlist_residual[[2]] <- W              # Spatial lag 1 (Uniform)
+
+# Row normalization
+for (i in seq_along(wlist_residual)) {
+  rs <- rowSums(wlist_residual[[i]])
+  rs[rs == 0] <- 1
+  wlist_residual[[i]] <- wlist_residual[[i]] / rs
+}
+
+# Compute STACF and STPACF for residuals
+max_lag <- min(40, nrow(residuals_matrix) - 1)  # Same as STACF/STPACF in files 8&9
+
+tryCatch({
+  # STACF of residuals
+  residual_stacf <- stacf(residuals_matrix, wlist = wlist_residual, tlag.max = max_lag, plot = FALSE)
+  
+  # STPACF of residuals  
+  residual_stpacf <- stpacf(residuals_matrix, wlist = wlist_residual, tlag.max = max_lag, plot = FALSE)
+  
+  cat("✅ Residual STACF/STPACF computed successfully\n")
+  
+  # Plot setup
+  temporal_lags <- 1:nrow(residual_stacf)
+  n_obs <- nrow(residuals_matrix)
+  conf_bound_spatial <- 1.96 / sqrt(n_obs)
+  
+  # STACF - Spatial Lag 0
+  stacf_slag0_data <- data.frame(
+    Lag = temporal_lags,
+    ACF = residual_stacf[, 1]
+  )
+  
+  p_stacf_slag0 <- ggplot(stacf_slag0_data, aes(x = Lag, y = ACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(conf_bound_spatial, -conf_bound_spatial), linetype = "dashed", color = "blue") +
+    geom_segment(aes(xend = Lag, yend = 0), color = "darkblue", size = 1) +
+    geom_point(color = "darkblue", size = 2) +
+    labs(title = "Residual STACF: Uniform Weights - Spatial Lag 0",
+         subtitle = "Within-region residual autocorrelation",
+         x = "Temporal Lag", y = "Residual STACF") +
+    theme_minimal()
+  
+  # STACF - Spatial Lag 1
+  stacf_slag1_data <- data.frame(
+    Lag = temporal_lags,
+    ACF = residual_stacf[, 2]
+  )
+  
+  p_stacf_slag1 <- ggplot(stacf_slag1_data, aes(x = Lag, y = ACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(conf_bound_spatial, -conf_bound_spatial), linetype = "dashed", color = "blue") +
+    geom_segment(aes(xend = Lag, yend = 0), color = "darkred", size = 1) +
+    geom_point(color = "darkred", size = 2) +
+    labs(title = "Residual STACF: Uniform Weights - Spatial Lag 1",
+         subtitle = "Neighbor residual autocorrelation",
+         x = "Temporal Lag", y = "Residual STACF") +
+    theme_minimal()
+  
+  # STPACF - Spatial Lag 0
+  stpacf_slag0_data <- data.frame(
+    Lag = temporal_lags,
+    PACF = residual_stpacf[, 1]
+  )
+  
+  p_stpacf_slag0 <- ggplot(stpacf_slag0_data, aes(x = Lag, y = PACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(conf_bound_spatial, -conf_bound_spatial), linetype = "dashed", color = "blue") +
+    geom_segment(aes(xend = Lag, yend = 0), color = "darkblue", size = 1) +
+    geom_point(color = "darkblue", size = 2) +
+    labs(title = "Residual STPACF: Uniform Weights - Spatial Lag 0",
+         subtitle = "Within-region residual partial autocorrelation",
+         x = "Temporal Lag", y = "Residual STPACF") +
+    theme_minimal()
+  
+  # STPACF - Spatial Lag 1
+  stpacf_slag1_data <- data.frame(
+    Lag = temporal_lags,
+    PACF = residual_stpacf[, 2]
+  )
+  
+  p_stpacf_slag1 <- ggplot(stpacf_slag1_data, aes(x = Lag, y = PACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(conf_bound_spatial, -conf_bound_spatial), linetype = "dashed", color = "blue") +
+    geom_segment(aes(xend = Lag, yend = 0), color = "darkred", size = 1) +
+    geom_point(color = "darkred", size = 2) +
+    labs(title = "Residual STPACF: Uniform Weights - Spatial Lag 1",
+         subtitle = "Neighbor residual partial autocorrelation",
+         x = "Temporal Lag", y = "Residual STPACF") +
+    theme_minimal()
+  
+  # Save spatial plots
+  ggsave("plots/12_residual_stacf_uniform_slag0.png", p_stacf_slag0, width = 10, height = 6, dpi = 300)
+  ggsave("plots/12_residual_stacf_uniform_slag1.png", p_stacf_slag1, width = 10, height = 6, dpi = 300)
+  ggsave("plots/12_residual_stpacf_uniform_slag0.png", p_stpacf_slag0, width = 10, height = 6, dpi = 300)
+  ggsave("plots/12_residual_stpacf_uniform_slag1.png", p_stpacf_slag1, width = 10, height = 6, dpi = 300)
+  
+  # Combined plots
+  combined_stacf <- grid.arrange(p_stacf_slag0, p_stacf_slag1, ncol = 2)
+  combined_stpacf <- grid.arrange(p_stpacf_slag0, p_stpacf_slag1, ncol = 2)
+  
+  ggsave("plots/12_residual_stacf_uniform_combined.png", combined_stacf, width = 16, height = 6, dpi = 300)
+  ggsave("plots/12_residual_stpacf_uniform_combined.png", combined_stpacf, width = 16, height = 6, dpi = 300)
+  
+  print(p_stacf_slag0)
+  print(p_stacf_slag1)
+  print(p_stpacf_slag0)
+  print(p_stpacf_slag1)
+  
+  cat("✅ Residual STACF/STPACF plots saved\n")
+  
+}, error = function(e) {
+  cat("⚠️ Residual STACF/STPACF analysis failed:", e$message, "\n")
+})
+
+# ============================================================================
 # DIAGNOSTIC SUMMARY
 # ============================================================================
 

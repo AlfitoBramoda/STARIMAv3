@@ -47,23 +47,25 @@ cat("✅ Using differenced_matrix for consistent forecasting\n")
 if (exists("correlation_results") && !is.null(correlation_results$model)) {
   model <- correlation_results$model
   
-  # Extract coefficients from the model
-  if (!is.null(model$phi)) {
+  # Extract coefficients from the model - Handle p_order=0 case
+  if (!is.null(model$phi) && nrow(model$phi) > 0) {
     phi <- model$phi
     cat("Using ORIGINAL correlation phi coefficients:\n")
     print(phi[1:min(3, nrow(phi)), 1])
   } else {
-    phi <- matrix(c(0.4, 0.2, 0.1), ncol = 1)
-    cat("Using default phi coefficients\n")
+    # For p_order = 0, create empty phi matrix
+    phi <- matrix(numeric(0), ncol = 1)
+    cat("No AR parameters (p_order = 0)\n")
   }
   
-  if (!is.null(model$theta)) {
+  if (!is.null(model$theta) && nrow(model$theta) > 0) {
     theta <- model$theta
     cat("Using ORIGINAL correlation theta coefficients:\n")
     print(theta[1:min(2, nrow(theta)), 1])
   } else {
-    theta <- matrix(c(0.3, 0.15), ncol = 1)
-    cat("Using default theta coefficients\n")
+    # For q_order = 0, create empty theta matrix
+    theta <- matrix(numeric(0), ncol = 1)
+    cat("No MA parameters (q_order = 0)\n")
   }
 } else {
   phi <- matrix(c(0.4, 0.2, 0.1), ncol = 1)
@@ -73,12 +75,22 @@ if (exists("correlation_results") && !is.null(correlation_results$model)) {
 
 # Apply consistent scaling if coefficients are extreme
 scaling_factor <- 1.0
-if (any(abs(phi) > 2.0, na.rm = TRUE) || any(abs(theta) > 2.0, na.rm = TRUE)) {
+if ((length(phi) > 0 && any(abs(phi) > 2.0, na.rm = TRUE)) || 
+    (length(theta) > 0 && any(abs(theta) > 2.0, na.rm = TRUE))) {
   scaling_factor <- 0.01
   cat("Applying scaling factor:", scaling_factor, "for extreme coefficients\n")
 }
 
-cat("Phi range:", range(phi), "Theta range:", range(theta), "\n")
+if (length(phi) > 0) {
+  cat("Phi range:", range(phi), "\n")
+} else {
+  cat("No phi coefficients (AR order = 0)\n")
+}
+if (length(theta) > 0) {
+  cat("Theta range:", range(theta), "\n")
+} else {
+  cat("No theta coefficients (MA order = 0)\n")
+}
 
 # Spatial weights setup - CORRELATION
 W_matrix <- spatial_weights$correlation
@@ -196,11 +208,19 @@ if (exists("correlation_results") && !is.null(correlation_results$model)) {
     cat("🔄 Using manual STARIMA implementation (more reliable)...\n")
     
     # Use actual model coefficients with dampening for stability
-    phi_coefs <- as.vector(phi) * 0.7  # Dampen AR coefficients
-    theta_coefs <- as.vector(theta) * 0.8  # Dampen MA coefficients
+    phi_coefs <- if (length(phi) > 0) as.vector(phi) * 0.7 else numeric(0)
+    theta_coefs <- if (length(theta) > 0) as.vector(theta) * 0.8 else numeric(0)
     
-    cat("📊 Using dampened phi:", phi_coefs, "\n")
-    cat("📊 Using dampened theta:", theta_coefs, "\n")
+    if (length(phi_coefs) > 0) {
+      cat("📊 Using dampened phi:", phi_coefs, "\n")
+    } else {
+      cat("📊 No AR coefficients (pure MA model)\n")
+    }
+    if (length(theta_coefs) > 0) {
+      cat("📊 Using dampened theta:", theta_coefs, "\n")
+    } else {
+      cat("📊 No MA coefficients (pure AR model)\n")
+    }
     
     # Get recent values for initialization
     recent_values <- tail(Y, 3)
@@ -226,30 +246,34 @@ if (exists("correlation_results") && !is.null(correlation_results$model)) {
       for (t in 1:h) {
         forecast_val <- 0
         
-        # AR component
-        for (p in 1:min(length(phi_coefs), 2)) {
-          if (t > p) {
-            # Use previous forecasts from new matrix
-            ar_val <- starima_forecast[t-p, col]
-          } else {
-            # Use recent actual values
-            lag_idx <- 2 - p + 1
-            ar_val <- recent_values[lag_idx, col]
+        # AR component - only if AR coefficients exist
+        if (length(phi_coefs) > 0) {
+          for (p in 1:min(length(phi_coefs), 2)) {
+            if (t > p) {
+              # Use previous forecasts from new matrix
+              ar_val <- starima_forecast[t-p, col]
+            } else {
+              # Use recent actual values
+              lag_idx <- 2 - p + 1
+              ar_val <- recent_values[lag_idx, col]
+            }
+            forecast_val <- forecast_val + phi_coefs[p] * ar_val
           }
-          forecast_val <- forecast_val + phi_coefs[p] * ar_val
         }
         
-        # MA component
-        for (q in 1:min(length(theta_coefs), 2)) {
-          if (t > q) {
-            # Use recent residuals (simplified as small random values)
-            residual <- rnorm(1, 0, noise_sd * 0.5)
-          } else {
-            # Use initial residuals
-            lag_idx <- 2 - q + 1
-            residual <- residuals_history[lag_idx, col]
+        # MA component - only if MA coefficients exist
+        if (length(theta_coefs) > 0) {
+          for (q in 1:min(length(theta_coefs), 2)) {
+            if (t > q) {
+              # Use recent residuals (simplified as small random values)
+              residual <- rnorm(1, 0, noise_sd * 0.5)
+            } else {
+              # Use initial residuals
+              lag_idx <- 2 - q + 1
+              residual <- residuals_history[lag_idx, col]
+            }
+            forecast_val <- forecast_val + theta_coefs[q] * residual
           }
-          forecast_val <- forecast_val + theta_coefs[q] * residual
         }
         
         # Spatial component - stronger for correlation weights
@@ -278,11 +302,21 @@ if (exists("correlation_results") && !is.null(correlation_results$model)) {
         
         # Ensure no NA or extreme values
         if (is.na(final_val) || is.infinite(final_val)) {
-          # Fallback: simple AR(1) with first coefficient
-          if (t == 1) {
-            final_val <- phi_coefs[1] * tail(Y[, col], 1)
+          # Fallback: use simple persistence or mean
+          if (length(phi_coefs) > 0) {
+            # Simple AR(1) with first coefficient
+            if (t == 1) {
+              final_val <- phi_coefs[1] * tail(Y[, col], 1)
+            } else {
+              final_val <- phi_coefs[1] * starima_forecast[t-1, col]
+            }
           } else {
-            final_val <- phi_coefs[1] * starima_forecast[t-1, col]
+            # Pure MA or random walk - use persistence
+            if (t == 1) {
+              final_val <- tail(Y[, col], 1)
+            } else {
+              final_val <- starima_forecast[t-1, col]
+            }
           }
         }
         

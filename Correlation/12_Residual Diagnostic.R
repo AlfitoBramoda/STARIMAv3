@@ -148,6 +148,161 @@ for (i in 1:length(regions)) {
 }
 
 # ============================================================================
+# RESIDUAL ACF/PACF ANALYSIS (SPATIAL LAG 0 & 1)
+# ============================================================================
+cat("\n📊 Residual ACF/PACF Analysis:\n")
+cat("==============================\n")
+
+# Load spatial weights for residual spatial analysis
+load("output/07_spatial_weights_correlation.RData")
+C <- spatial_weights$correlation
+
+# Create spatial weights list for residual analysis
+wlist_residual <- list()
+wlist_residual[[1]] <- diag(nrow(C))  # Spatial lag 0 (Identity)
+wlist_residual[[2]] <- C              # Spatial lag 1 (Correlation)
+
+# Row normalization
+for (i in seq_along(wlist_residual)) {
+  rs <- rowSums(wlist_residual[[i]])
+  rs[rs == 0] <- 1
+  wlist_residual[[i]] <- wlist_residual[[i]] / rs
+}
+
+# Compute STACF and STPACF for residuals
+max_lag <- min(40, nrow(residuals_matrix) - 1)  # Same as STACF/STPACF in files 8&9
+
+tryCatch({
+  # STACF of residuals
+  residual_stacf <- stacf(residuals_matrix, wlist = wlist_residual, tlag.max = max_lag, plot = FALSE)
+  
+  # STPACF of residuals  
+  residual_stpacf <- stpacf(residuals_matrix, wlist = wlist_residual, tlag.max = max_lag, plot = FALSE)
+  
+  cat("✅ Residual STACF/STPACF computed successfully\n")
+  
+  # Plot setup
+  library(gridExtra)
+  temporal_lags <- 1:nrow(residual_stacf)
+  n_obs <- nrow(residuals_matrix)
+  conf_bound <- 1.96 / sqrt(n_obs)
+  
+  # ============================================================================
+  # RESIDUAL STACF PLOTS (Spatial Lag 0 & 1)
+  # ============================================================================
+  cat("📈 Creating Residual STACF plots...\n")
+  
+  # STACF - Spatial Lag 0 (Within-region effects)
+  stacf_slag0_data <- data.frame(
+    Lag = temporal_lags,
+    ACF = residual_stacf[, 1]
+  )
+  
+  p_stacf_slag0 <- ggplot(stacf_slag0_data, aes(x = Lag, y = ACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(conf_bound, -conf_bound), linetype = "dashed", color = "blue") +
+    geom_segment(aes(xend = Lag, yend = 0), color = "darkgreen", size = 1) +
+    geom_point(color = "darkgreen", size = 2) +
+    labs(title = "Residual STACF: Correlation Weights - Spatial Lag 0",
+         subtitle = "Within-region residual autocorrelation (Identity matrix)",
+         x = "Temporal Lag", y = "Residual STACF") +
+    theme_minimal()
+  
+  # STACF - Spatial Lag 1 (Neighbor effects)
+  stacf_slag1_data <- data.frame(
+    Lag = temporal_lags,
+    ACF = residual_stacf[, 2]
+  )
+  
+  p_stacf_slag1 <- ggplot(stacf_slag1_data, aes(x = Lag, y = ACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(conf_bound, -conf_bound), linetype = "dashed", color = "blue") +
+    geom_segment(aes(xend = Lag, yend = 0), color = "darkred", size = 1) +
+    geom_point(color = "darkred", size = 2) +
+    labs(title = "Residual STACF: Correlation Weights - Spatial Lag 1",
+         subtitle = "Neighbor residual autocorrelation (Correlation matrix)",
+         x = "Temporal Lag", y = "Residual STACF") +
+    theme_minimal()
+  
+  # ============================================================================
+  # RESIDUAL STPACF PLOTS (Spatial Lag 0 & 1)
+  # ============================================================================
+  cat("📈 Creating Residual STPACF plots...\n")
+  
+  # STPACF - Spatial Lag 0 (Within-region effects)
+  stpacf_slag0_data <- data.frame(
+    Lag = temporal_lags,
+    PACF = residual_stpacf[, 1]
+  )
+  
+  p_stpacf_slag0 <- ggplot(stpacf_slag0_data, aes(x = Lag, y = PACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(conf_bound, -conf_bound), linetype = "dashed", color = "blue") +
+    geom_segment(aes(xend = Lag, yend = 0), color = "darkgreen", size = 1) +
+    geom_point(color = "darkgreen", size = 2) +
+    labs(title = "Residual STPACF: Correlation Weights - Spatial Lag 0",
+         subtitle = "Within-region residual partial autocorrelation (Identity matrix)",
+         x = "Temporal Lag", y = "Residual STPACF") +
+    theme_minimal()
+  
+  # STPACF - Spatial Lag 1 (Neighbor effects)
+  stpacf_slag1_data <- data.frame(
+    Lag = temporal_lags,
+    PACF = residual_stpacf[, 2]
+  )
+  
+  p_stpacf_slag1 <- ggplot(stpacf_slag1_data, aes(x = Lag, y = PACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(conf_bound, -conf_bound), linetype = "dashed", color = "blue") +
+    geom_segment(aes(xend = Lag, yend = 0), color = "darkred", size = 1) +
+    geom_point(color = "darkred", size = 2) +
+    labs(title = "Residual STPACF: Correlation Weights - Spatial Lag 1",
+         subtitle = "Neighbor residual partial autocorrelation (Correlation matrix)",
+         x = "Temporal Lag", y = "Residual STPACF") +
+    theme_minimal()
+  
+  # ============================================================================
+  # SAVE PLOTS
+  # ============================================================================
+  # Individual plots
+  ggsave("plots/12_residual_stacf_correlation_slag0.png", p_stacf_slag0, width = 10, height = 6, dpi = 300)
+  ggsave("plots/12_residual_stacf_correlation_slag1.png", p_stacf_slag1, width = 10, height = 6, dpi = 300)
+  ggsave("plots/12_residual_stpacf_correlation_slag0.png", p_stpacf_slag0, width = 10, height = 6, dpi = 300)
+  ggsave("plots/12_residual_stpacf_correlation_slag1.png", p_stpacf_slag1, width = 10, height = 6, dpi = 300)
+  
+  # Combined plots
+  combined_stacf <- grid.arrange(p_stacf_slag0, p_stacf_slag1, ncol = 2)
+  combined_stpacf <- grid.arrange(p_stpacf_slag0, p_stpacf_slag1, ncol = 2)
+  
+  ggsave("plots/12_residual_stacf_correlation_combined.png", combined_stacf, width = 16, height = 6, dpi = 300)
+  ggsave("plots/12_residual_stpacf_correlation_combined.png", combined_stpacf, width = 16, height = 6, dpi = 300)
+  
+  # Display plots
+  print(p_stacf_slag0)
+  print(p_stacf_slag1)
+  print(p_stpacf_slag0)
+  print(p_stpacf_slag1)
+  
+  cat("✅ Residual STACF/STPACF plots saved\n")
+  
+  # Check for significant residual autocorrelation
+  significant_stacf_slag0 <- any(abs(residual_stacf[, 1]) > conf_bound, na.rm = TRUE)
+  significant_stacf_slag1 <- any(abs(residual_stacf[, 2]) > conf_bound, na.rm = TRUE)
+  significant_stpacf_slag0 <- any(abs(residual_stpacf[, 1]) > conf_bound, na.rm = TRUE)
+  significant_stpacf_slag1 <- any(abs(residual_stpacf[, 2]) > conf_bound, na.rm = TRUE)
+  
+  cat("\n🔍 Residual Autocorrelation Assessment:\n")
+  cat(sprintf("- STACF Spatial Lag 0: %s\n", ifelse(significant_stacf_slag0, "❌ Significant autocorr.", "✅ No significant autocorr.")))
+  cat(sprintf("- STACF Spatial Lag 1: %s\n", ifelse(significant_stacf_slag1, "❌ Significant autocorr.", "✅ No significant autocorr.")))
+  cat(sprintf("- STPACF Spatial Lag 0: %s\n", ifelse(significant_stpacf_slag0, "❌ Significant partial autocorr.", "✅ No significant partial autocorr.")))
+  cat(sprintf("- STPACF Spatial Lag 1: %s\n", ifelse(significant_stpacf_slag1, "❌ Significant partial autocorr.", "✅ No significant partial autocorr.")))
+  
+}, error = function(e) {
+  cat("⚠️ Residual STACF/STPACF analysis failed:", e$message, "\n")
+  cat("🔄 Continuing with basic diagnostic tests...\n")
+})
+
+# ============================================================================
 # DIAGNOSTIC SUMMARY
 # ============================================================================
 cat("\n📋 DIAGNOSTIC SUMMARY:\n")

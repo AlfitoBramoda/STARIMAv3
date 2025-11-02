@@ -43,7 +43,7 @@ d_order <- 1
 # ------------------------------ Model Orders (EXPERIMENT HERE!) --------------------------------
 # 🧪 CHANGE THESE VALUES TO EXPERIMENT WITH DIFFERENT ORDERS:
 p_order <- 1          # AR order (try: 1, 2, 3, 4) - SAME AS UNIFORM/DISTANCE
-q_order <- 2          # MA order (try: 1, 2, 3) - SAME AS UNIFORM/DISTANCE
+q_order <- 0          # MA order (try: 1, 2, 3) - SAME AS UNIFORM/DISTANCE
 max_spatial_lag <- 1  # Spatial lags (usually keep at 1)
 
 # 📊 Popular combinations to try:
@@ -82,15 +82,26 @@ ok("Spatial weights list constructed with ", length(wlist_correlation), " lags")
 
 # ------------------------------ Dynamic Masks (AR/MA) --------------------------------
 # Create masks dynamically based on p_order and q_order
-ar_mask <- matrix(FALSE, p_order, max_spatial_lag + 1)
-ma_mask <- matrix(FALSE, q_order, max_spatial_lag + 1)
-
-# Activate all temporal lags for spatial lag 0 (within-region effects)
-for (p in 1:p_order) {
-  ar_mask[p, 1] <- TRUE  # tlag_p-slag0
+# Handle p_order = 0 case
+if (p_order > 0) {
+  ar_mask <- matrix(FALSE, p_order, max_spatial_lag + 1)
+  # Activate all temporal lags for spatial lag 0 (within-region effects)
+  for (p in 1:p_order) {
+    ar_mask[p, 1] <- TRUE  # tlag_p-slag0
+  }
+} else {
+  ar_mask <- matrix(FALSE, 0, max_spatial_lag + 1)  # Empty matrix for p=0
 }
-for (q in 1:q_order) {
-  ma_mask[q, 1] <- TRUE  # tlag_q-slag0
+
+# Handle q_order = 0 case
+if (q_order > 0) {
+  ma_mask <- matrix(FALSE, q_order, max_spatial_lag + 1)
+  # Activate all temporal lags for spatial lag 0 (within-region effects)
+  for (q in 1:q_order) {
+    ma_mask[q, 1] <- TRUE  # tlag_q-slag0
+  }
+} else {
+  ma_mask <- matrix(FALSE, 0, max_spatial_lag + 1)  # Empty matrix for q=0
 }
 
 # Optional: Activate some spatial lags (uncomment if needed)
