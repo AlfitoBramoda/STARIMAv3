@@ -104,9 +104,13 @@ if (q_order > 0) {
   ma_mask <- matrix(FALSE, 0, max_spatial_lag + 1)  # Empty matrix for q=0
 }
 
-# Optional: Activate some spatial lags (uncomment if needed)
-# ar_mask[1, 2] <- TRUE  # tlag1-slag1 (first AR lag with spatial lag 1)
-# ma_mask[1, 2] <- TRUE  # tlag1-slag1 (first MA lag with spatial lag 1)
+# Activate spatial lags for true STARIMA model
+if (p_order > 0) {
+  ar_mask[1, 2] <- TRUE  # tlag1-slag1 (first AR lag with spatial lag 1)
+}
+if (q_order > 0) {
+  ma_mask[1, 2] <- TRUE  # tlag1-slag1 (first MA lag with spatial lag 1)
+}
 
 cat("🎯 Dynamic Mask Configuration:\n")
 cat(sprintf("- AR mask: %dx%d (p=%d, spatial_lags=%d)\n", 
