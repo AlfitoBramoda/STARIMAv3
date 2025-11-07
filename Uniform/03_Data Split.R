@@ -1,6 +1,6 @@
 # ============================================================================
 # STARMA Forecasting Pipeline - Phase 1: Data Preparation
-# File: 01_rainfall_data.R
+# File: 03_Data Split.R
 # Purpose: Split rainfall data into training and testing sets
 # Author: STARMA Analysis
 # Date: 2024
@@ -197,12 +197,12 @@ cat("✅ Training data: 108 obs × 5 regions (2015-2023)\n")
 cat("✅ Testing data: 12 obs × 5 regions (2024)\n")
 cat("✅ Data summaries calculated\n")
 cat("✅ 4 visualization plots generated\n")
-cat("✅ Results saved to: ooutput/03_data_split.RDatan")
+cat("✅ Results saved to: output/03_data_split.RData\n")
 cat("✅ Data available in RStudio viewer\n\n")
 
 cat("📊 PHASE 1 DATA PREPARATION: COMPLETED!\n")
 cat("🎯 Ready for Phase 2: STARIMA Identification\n")
-cat("📁 Next file: 04_Boxcox Transformt.R\n\n")
+cat("📁 Next file: 04_Boxcox Transform.R\n\n")
 
 cat("Data split validation:\n")
 cat("- No data leakage: ✅\n")

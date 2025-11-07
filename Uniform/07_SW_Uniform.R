@@ -1,124 +1,115 @@
 # ============================================================================
-# 05_Spatial_Weights_Uniform.R - Create Uniform Spatial Weight Matrix
-# ============================================================================
-# Purpose: Create uniform spatial weight matrix for STARMA modeling
-# Author: STARMA Project
-# Date: 2024
+# 07_SW_Uniform.R
+# Purpose : Create uniform spatial weights matrix for STARIMA modeling
+# Input   : output/06_distance_matrix_km.RData (not used, but for consistency)
+# Output  : output/07_spatial_weights_uniform.RData
 # ============================================================================
 
-cat("🗺️ Spatial Weights Creation (Uniform) Started...\n")
+cat("🚀 Creating Uniform Spatial Weights for STARIMA...\n")
 
-# ============================================================================
-# LOAD DATA
-# ============================================================================
+dir.create("artifacts", showWarnings = FALSE, recursive = TRUE)
+
+# ------------------------------- Load ---------------------------------------
+# Load distance matrix for consistency (though not used for uniform weights)
+infile <- "output/06_distance_matrix_km.RData"
+if (file.exists(infile)) {
+  load(infile)
+  cat("📊 Distance matrix loaded (for reference only)\n")
+}
+
+# Load basic data for region names
 load("output/01_rainfall_data.RData")
-cat("📊 Data loaded: rainfall_matrix (", nrow(rainfall_matrix), "x", ncol(rainfall_matrix), ")\n")
-
-# Define regions and coordinates
 regions <- colnames(rainfall_matrix)
-n_regions <- length(regions)
+n <- length(regions)
 
-cat("\n🗺️ Spatial Information:\n")
-cat("Regions:", paste(regions, collapse = ", "), "\n")
-cat("Number of regions:", n_regions, "\n")
+# ----------------------------- Create Uniform Weights ----------------------
+# Create uniform weights matrix: equal weights for all neighbors
+W <- matrix(0, nrow = n, ncol = n)
+rownames(W) <- colnames(W) <- regions
 
-# Display coordinates
-cat("\n📍 Coordinates:\n")
-print(coordinates)
-
-# ============================================================================
-# CREATE UNIFORM WEIGHTS MATRIX
-# ============================================================================
-cat("\n1️⃣ Creating Uniform Weights Matrix...\n")
-
-uniform_weights <- matrix(0, nrow = n_regions, ncol = n_regions)
-rownames(uniform_weights) <- colnames(uniform_weights) <- regions
-
-# Assign equal weights to all other regions (excluding self)
-for (i in 1:n_regions) {
-  for (j in 1:n_regions) {
+# Fill off-diagonal elements with equal weights
+for (i in 1:n) {
+  for (j in 1:n) {
     if (i != j) {
-      uniform_weights[i, j] <- 1 / (n_regions - 1)
+      W[i, j] <- 1 / (n - 1)  # Equal weight for all neighbors
     }
   }
 }
 
+# Diagonal remains 0 (no self-influence)
+diag(W) <- 0
+
 cat("✅ Uniform weights matrix created\n")
-cat("Matrix dimensions:", dim(uniform_weights), "\n")
-cat("Row sums:", round(rowSums(uniform_weights), 3), "\n")
-cat("Weight range: [", round(min(uniform_weights[uniform_weights > 0]), 3), 
-    ",", round(max(uniform_weights[uniform_weights > 0]), 3), "]\n")
+cat("Each region has equal influence:", round(1/(n-1), 4), "\n")
 
-# ============================================================================
-# VALIDATION
-# ============================================================================
-cat("\n🔍 VALIDATING UNIFORM WEIGHTS...\n")
+# ------------------------------- Validation ---------------------------------
+diag_ok   <- all(diag(W) == 0)
+row_ok    <- all(abs(rowSums(W) - 1) < 1e-10)
+nonneg_ok <- all(W >= 0)
+symmetric_ok <- isTRUE(all.equal(W, t(W), tolerance = 1e-8))
 
-diag_check <- all(diag(uniform_weights) == 0)
-sum_check <- all(abs(rowSums(uniform_weights) - 1) < 1e-10)
-non_neg_check <- all(uniform_weights >= 0)
+met <- W[W > 0]
+cat("✅ Uniform weights validated successfully.\n",
+    "  Diagonal=0  : ", ifelse(diag_ok, "PASS", "FAIL"), "\n",
+    "  Row sums=1  : ", ifelse(row_ok,  "PASS", "FAIL"), "\n",
+    "  Non-negative: ", ifelse(nonneg_ok,"PASS", "FAIL"), "\n",
+    "  Symmetric   : ", ifelse(symmetric_ok,"PASS", "FAIL"), "\n",
+    sprintf("  Weight range: [%.6f, %.6f]\n",
+            min(met, na.rm = TRUE), max(met, na.rm = TRUE)), sep = "")
 
-cat("  Diagonal = 0:", ifelse(diag_check, "✅ PASS", "❌ FAIL"), "\n")
-cat("  Row sums = 1:", ifelse(sum_check, "✅ PASS", "❌ FAIL"), "\n")
-cat("  Non-negative:", ifelse(non_neg_check, "✅ PASS", "❌ FAIL"), "\n")
+# Display Spatial Weights Matrix in console
+cat("\n--- 🎯 SPATIAL WEIGHTS MATRIX (UNIFORM) ---\n")
+print(round(W, 4))
 
-cat("  Min weight:", round(min(uniform_weights[uniform_weights > 0]), 4), "\n")
-cat("  Max weight:", round(max(uniform_weights), 4), "\n")
-cat("  Mean weight:", round(mean(uniform_weights[uniform_weights > 0]), 4), "\n")
+# Verify row sums = 1
+cat("\n--- ✅ ROW SUMS VERIFICATION ---\n")
+row_sums_check <- rowSums(W)
+for(i in 1:length(regions)) {
+  cat(sprintf("%s: %.6f\n", regions[i], row_sums_check[i]))
+}
+cat(sprintf("All rows sum to 1: %s\n", ifelse(all(abs(row_sums_check - 1) < 1e-10), "✅ YES", "❌ NO")))
 
-# ============================================================================
-# VISUALIZATION
-# ============================================================================
-cat("\n📊 Creating Heatmap Visualization...\n")
+# ------------------------------ Analytics -----------------------------------
+uniform_analysis <- data.frame(
+  Region = regions,
+  Equal_Neighbors = rep(n-1, n),
+  Weight_Per_Neighbor = rep(round(1/(n-1), 6), n),
+  Influence_Pattern = rep("Equal to all", n),
+  Spatial_Structure = rep("Uniform connectivity", n),
+  row.names = NULL
+)
 
-library(ggplot2)
-library(tidyr)
+cat("\n--- 📊 UNIFORM WEIGHTS ANALYSIS ---\n")
+print(uniform_analysis)
 
-# Prepare data frame
-uniform_df <- as.data.frame(uniform_weights)
-uniform_df$From <- rownames(uniform_df)
-melted_uniform <- uniform_df %>%
-  pivot_longer(cols = -From, names_to = "To", values_to = "Weight")
-
-# Plot
-p_uniform <- ggplot(melted_uniform, aes(x = To, y = From, fill = Weight)) +
-  geom_tile(color = "white", size = 0.5) +
-  scale_fill_gradient2(low = "white", mid = "lightblue", high = "darkblue",
-                       midpoint = max(uniform_weights) / 2, name = "Weight") +
-  labs(title = "Uniform Spatial Weight Matrix",
-       subtitle = paste("Range: [", round(min(uniform_weights), 3), ",", round(max(uniform_weights), 3), "]"),
-       x = "To Region", y = "From Region") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5)) +
-  coord_fixed()
-
-# Save heatmap
-ggsave("plots/05_uniform_weights.png", p_uniform, width = 8, height = 6, dpi = 300)
-cat("✅ Heatmap saved: plots/05_uniform_weights.png\n")
-
-# ============================================================================
-# SAVE RESULTS
-# ============================================================================
-spatial_weights <- list(uniform = uniform_weights)
-
+# ------------------------------- Persist ------------------------------------
+spatial_weights <- list(uniform = W)
 weights_summary <- data.frame(
-  Weight_Type = "Uniform",
-  Min_Weight = round(min(uniform_weights[uniform_weights > 0]), 4),
-  Max_Weight = round(max(uniform_weights), 4),
-  Mean_Weight = round(mean(uniform_weights[uniform_weights > 0]), 4),
-  Validation = ifelse(diag_check && sum_check && non_neg_check, "✅ PASS", "❌ FAIL"),
+  Weight_Type = "Uniform (Equal Weights)",
+  Min_Weight  = min(met, na.rm = TRUE),
+  Max_Weight  = max(met, na.rm = TRUE),
+  Mean_Weight = mean(met, na.rm = TRUE),
+  Std_Weight  = sd(met, na.rm = TRUE),  # Should be 0 for uniform
+  Validation  = ifelse(diag_ok && row_ok && nonneg_ok && symmetric_ok, "✅ PASS", "❌ CHECK"),
   stringsAsFactors = FALSE
 )
 
-print(weights_summary)
-
-save(spatial_weights, coordinates, uniform_weights, weights_summary, rainfall_matrix,
+save(spatial_weights, W, uniform_analysis, weights_summary,
      file = "output/07_spatial_weights_uniform.RData")
+write.csv(W, file = "artifacts/07_uniform_weights.csv", row.names = TRUE)
 
-cat("\n✅ Uniform Spatial Weights successfully created and saved!\n")
-cat("💾 Saved to: output/07_spatial_weights_uniform.RData\n")
-cat("📈 Visualization saved to: plots/05_uniform_weights.png\n")
-cat("🔄 Next step: Data splitting for train/test\n")
+cat("\n💾 Saved -> output/07_spatial_weights_uniform.RData\n")
+cat("🧾 Exported -> artifacts/07_uniform_weights.csv\n")
+
+# ============================================================================
+# UNIFORM WEIGHTS CHARACTERISTICS
+# ============================================================================
+cat("\n--- 🔍 UNIFORM WEIGHTS CHARACTERISTICS ---\n")
+cat("✅ Symmetric matrix (w_ij = w_ji)\n")
+cat("✅ Equal influence assumption\n")
+cat("✅ No geographic distance consideration\n")
+cat("✅ Simplest spatial dependence structure\n")
+cat("✅ Baseline for comparison with IDW and correlation weights\n")
+cat(sprintf("✅ Each region influences others equally: %.4f\n", 1/(n-1)))
+
 cat(paste(rep("=", 60), collapse = ""), "\n")

@@ -20,7 +20,7 @@ cat("=== STARMA MODEL STRUCTURE DEFINITION (UNIFORM WEIGHTS) ===\n\n")
 # CONFIGURATION
 # ============================================================================
 n_regions <- 5           # Number of regions
-max_spatial_lag <- 2     # Maximum spatial lag (from spatial weights)
+max_spatial_lag <- 1     # Maximum spatial lag (SLAG 0 and SLAG 1 only)
 d_order <- 1             # Non-seasonal differencing
 D_order <- 1             # Seasonal differencing applied
 seasonal_period <- 12    # Seasonal period (e.g., 12 months)
@@ -112,10 +112,10 @@ if (file.exists("output/09_stpacf_uniform_only.RData")) {
   p_order <- 3; q_order <- 3  # Use STARIMA(3,1,3) as default
 }
 
-# Calculate parameters with correct orders
-max_spatial_lag <- 2
-ar_mask <- matrix(1, nrow = max_spatial_lag + 1, ncol = p_order)  # 3x3
-ma_mask <- matrix(1, nrow = max_spatial_lag + 1, ncol = q_order)  # 3x3
+# Calculate parameters with correct orders (SLAG 0 and SLAG 1)
+max_spatial_lag <- 1
+ar_mask <- matrix(1, nrow = max_spatial_lag + 1, ncol = p_order)  # 2x3 (slag0, slag1)
+ma_mask <- matrix(1, nrow = max_spatial_lag + 1, ncol = q_order)  # 2x3 (slag0, slag1)
 
 cat("- AR order (p):", p_order, "\n")
 cat("- MA order (q):", q_order, "\n")

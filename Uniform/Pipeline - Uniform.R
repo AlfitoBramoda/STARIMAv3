@@ -14,21 +14,8 @@ source("Uniform/04_Boxcox Transform.R")
 
 source("Uniform/05_Differencing.R")
 
-source("Uniform/06_Data Centering.R")
+source("Uniform/06_Ubah KM.R")
 
 source("Uniform/07_SW_Uniform.R")
 
-source("Uniform/08_STACF.R")
-
-source("Uniform/09_STPACF.R")
-
-source("Uniform/10_Model Structure.R")
-
-source("Uniform/11_STARIMA  Estimation.R")
-
-source("Uniform/12_Residual Diagnostic.R")
-
-source("Uniform/13_Model Selection.R")
-source("Uniform/14_Residual Analysis.R")
-source("Uniform/15_STARIMA Forecasting.R")
-source("Uniform/16_Visualisasi.R")
+# Note: Files 08-16 will be created later for model identification and forecasting

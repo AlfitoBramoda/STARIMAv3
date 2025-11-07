@@ -1,5 +1,5 @@
 # ============================================================================
-# 03_Differencing.R - Seasonal Differencing after Box-Cox (Train 2015–2023)
+# 05_Differencing.R - Seasonal Differencing after Box-Cox (Train 2015–2023)
 # ============================================================================
 # Purpose : Use Box-Cox transformed data (final_data) and apply seasonal
 #           differencing D=1 with period s=12 on TRAIN set only
@@ -36,7 +36,7 @@ if (exists("final_data") && is.matrix(final_data)) {
   source_matrix <- train_data
   cat("ℹ️ final_data not found — using raw TRAIN data (train_data)\n")
 } else {
-  stop("❌ Neither 'final_data' nor 'train_data' is available in 02c_boxcox_data.RData")
+  stop("❌ Neither 'final_data' nor 'train_data' is available in 04_boxcox_data.RData")
 }
 
 # Tanggal TRAIN (opsional, untuk plotting)
@@ -74,7 +74,7 @@ for (r in regions) {
   differenced_list[[r]] <- diff(source_matrix[, r], lag = s_period, differences = D_order)
 }
 
-# Ukuran “kerugian” observasi karena seasonal differencing
+# Ukuran "kerugian" observasi karena seasonal differencing
 lost <- D_order * s_period
 cat("ℹ️ Observations lost due to seasonal differencing:", lost, "\n")
 
@@ -155,9 +155,9 @@ if (!is.null(diff_dates)) {
   p <- p + scale_x_date(date_breaks = "1 year", date_labels = "%Y")
 }
 
-ggsave("plots/03_differenced_train_D1S12_boxcox.png", p, width = 12, height = 8, dpi = 300)
+ggsave("plots/05_differenced_train_D1S12_boxcox.png", p, width = 12, height = 8, dpi = 300)
 print(p)
-cat("📈 Saved plot: plots/03_differenced_train_D1S12_boxcox.png\n")
+cat("📈 Saved plot: plots/05_differenced_train_D1S12_boxcox.png\n")
 
 # ----------------------------------------------------------------------------
 # 8️⃣ Save Results (sama seperti sebelumnya untuk kompatibilitas)

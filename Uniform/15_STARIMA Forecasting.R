@@ -57,10 +57,14 @@ if (exists("uniform_results") && !is.null(uniform_results$model)) {
     cat("Using default phi coefficients\n")
   }
   
-  if (!is.null(model$theta)) {
+  if (!is.null(model$theta) && nrow(model$theta) > 0) {
     theta <- model$theta
     cat("Using ORIGINAL uniform theta coefficients:\n")
-    print(theta[1:min(2, nrow(theta)), 1])
+    # Safe bounds checking for theta
+    max_rows <- min(2, nrow(theta))
+    if (max_rows > 0) {
+      print(theta[1:max_rows, 1, drop = FALSE])
+    }
   } else {
     theta <- matrix(c(0.3, 0.15), ncol = 1)
     cat("Using default theta coefficients\n")
@@ -80,19 +84,16 @@ if (any(abs(phi) > 2.0, na.rm = TRUE) || any(abs(theta) > 2.0, na.rm = TRUE)) {
 
 cat("Phi range:", range(phi), "Theta range:", range(theta), "\n")
 
-# Spatial weights setup - UNIFORM
+# Spatial weights setup - UNIFORM (SLAG 0 and SLAG 1 only)
 W_matrix <- spatial_weights$uniform
 wlist <- list()
-wlist[[1]] <- diag(nrow(W_matrix))
-wlist[[2]] <- W_matrix
-wlist[[3]] <- W_matrix %*% W_matrix
+wlist[[1]] <- diag(nrow(W_matrix))  # SLAG 0: Identity matrix
+wlist[[2]] <- W_matrix              # SLAG 1: Uniform weights
 
-# Row normalization
-for (k in 2:length(wlist)) {
-  for (i in 1:nrow(wlist[[k]])) {
-    rs <- sum(wlist[[k]][i, ])
-    if (rs > 0) wlist[[k]][i, ] <- wlist[[k]][i, ] / rs
-  }
+# Row normalization for SLAG 1 only (SLAG 0 is already normalized)
+for (i in 1:nrow(wlist[[2]])) {
+  rs <- sum(wlist[[2]][i, ])
+  if (rs > 0) wlist[[2]][i, ] <- wlist[[2]][i, ] / rs
 }
 
 # ============================================================================

@@ -8,6 +8,12 @@
 
 cat("🚀 Starting STARIMA Residual Visualization (uniform Weights)...\n\n")
 
+# Clear graphics environment
+while (dev.cur() > 1) dev.off()
+if (requireNamespace("grid", quietly = TRUE)) {
+  tryCatch(grid::grid.newpage(), error = function(e) {})
+}
+
 # ============================================================================
 # LOAD REQUIRED LIBRARIES
 # ============================================================================
@@ -93,27 +99,57 @@ for (r in regions) {
 # ============================================================================
 cat("\n🔁 Generating ACF/PACF residual diagnostics...\n")
 
+# Clear any existing graphics devices
+while (dev.cur() > 1) dev.off()
+
 for (r in regions) {
   ts_resid <- ts(resid_matrix[, r])
+  
+  # Use png device properly
   png(paste0("plots/13_residual_acf_pacf_", r, ".png"),
       width = 1000, height = 400)
-  par(mfrow = c(1, 2))
-  Acf(ts_resid, main = paste("ACF Residual -", r))
-  Pacf(ts_resid, main = paste("PACF Residual -", r))
-  dev.off()
+  
+  tryCatch({
+    par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+    Acf(ts_resid, main = paste("ACF Residual -", r), plot = TRUE)
+    Pacf(ts_resid, main = paste("PACF Residual -", r), plot = TRUE)
+  }, finally = {
+    dev.off()  # Ensure device is closed
+  })
+  
   cat("✅ ACF/PACF plot saved for:", r, "\n")
 }
-par(mfrow = c(1, 1))
+
+# Reset graphics parameters
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 2) + 0.1)
 
 # ============================================================================
 # 4️⃣ GRID VISUALIZATION PREVIEW
 # ============================================================================
-cat("\n🖼️ Displaying combined preview (first two regions)...\n")
+cat("\n🖼️ Creating combined preview plot...\n")
+
+# Clear any grid viewports
+if (requireNamespace("grid", quietly = TRUE)) {
+  tryCatch({
+    grid::grid.newpage()
+  }, error = function(e) {
+    # Ignore viewport errors
+  })
+}
 
 if (length(ts_plots) >= 2) {
-  gridExtra::grid.arrange(ts_plots[[1]], hist_plots[[1]],
-                          ts_plots[[2]], hist_plots[[2]],
-                          ncol = 2)
+  tryCatch({
+    combined_plot <- gridExtra::grid.arrange(ts_plots[[1]], hist_plots[[1]],
+                                           ts_plots[[2]], hist_plots[[2]],
+                                           ncol = 2)
+    
+    # Save combined plot
+    ggsave("plots/13_residual_combined_preview.png", combined_plot, 
+           width = 12, height = 8, dpi = 300)
+    cat("✅ Combined preview saved: plots/13_residual_combined_preview.png\n")
+  }, error = function(e) {
+    cat("⚠️ Grid arrange failed, skipping combined plot\n")
+  })
 }
 
 # ============================================================================
