@@ -24,7 +24,7 @@ max_spatial_lag <- 2     # Maximum spatial lag (from spatial weights)
 # 🧪 CUSTOM NON-SEASONAL PARAMETERS (EDIT THESE!):
 p_order <- 0             # Non-seasonal AR order (try: 1, 2, 3, 4)
 d_order <- 0             # Non-seasonal differencing (usually 0 or 1)
-q_order <- 1             # Non-seasonal MA order (try: 1, 2, 3)
+q_order <- 0             # Non-seasonal MA order (try: 1, 2, 3)
 
 # 🧪 CUSTOM SEASONAL PARAMETERS (EDIT THESE!):
 P_order <- 0             # Seasonal AR order (try: 0, 1, 2)
