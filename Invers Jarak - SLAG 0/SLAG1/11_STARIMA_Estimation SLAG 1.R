@@ -19,27 +19,42 @@ ok   <- function(...)  message(paste0("✅ ", paste(..., collapse=" ")))
 
 # ------------------------------ Data Loading --------------------------------
 req_files <- c(
-  "output/09_stpacf_distance_only.RData",
-  "output/07_spatial_weights_idw.RData",
+  "output/08_stacf_distance_only.RData",
+  "output/07_spatial_weights_distance.RData",
   "output/05_differencing_results.RData"
 )
 missing <- req_files[!file.exists(req_files)]
 if (length(missing)) halt("Missing required files: ", paste(missing, collapse=", "))
 
-load("output/09_stpacf_distance_only.RData")
-load("output/07_spatial_weights_idw.RData")
+load("output/08_stacf_distance_only.RData")
+load("output/07_spatial_weights_distance.RData")
 load("output/05_differencing_results.RData")
+load("output/10_model_structure_distance_weights_slag1.RData")
 
 if (!exists("differenced_matrix")) halt("'differenced_matrix' not found")
 if (!exists("spatial_weights") || is.null(spatial_weights$distance)) halt("'spatial_weights$distance' not found")
 
+# Extract dynamic model orders from model structure
+if (exists("model_structures") && "distance" %in% names(model_structures)) {
+  structure <- model_structures$distance
+  p_order <- structure$ar_order %nz% 1
+  d_order <- structure$d_order %nz% 0
+  q_order <- structure$ma_order %nz% 1
+  P_order <- structure$seasonal_ar_order %nz% 0
+  D_order <- structure$seasonal_d_order %nz% 1
+  Q_order <- structure$seasonal_ma_order %nz% 0
+  seasonal_period <- structure$seasonal_period %nz% 12
+  max_spatial_lag <- structure$max_spatial_lag %nz% 1
+} else {
+  p_order <- 1; d_order <- 0; q_order <- 1
+  P_order <- 0; D_order <- 1; Q_order <- 0
+  seasonal_period <- 12; max_spatial_lag <- 1
+}
+
 data_input <- differenced_matrix
-d_order <- 1
-p_order <- 1
-q_order <- 1
 
 cat("=== STARIMA ESTIMATION - distance WEIGHTS (SLAG 1 ONLY) ===\n\n")
-cat(sprintf("- Model: STARIMA(%d,%d,%d)\n", p_order, d_order, q_order))
+cat(sprintf("- Model: STARIMA(%d,%d,%d) × (%d,%d,%d)%d\n", p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 cat("- Spatial weights: distance-based (SLAG 1 only)\n")
 cat(sprintf("- Training data: %d obs × %d regions\n\n", nrow(data_input), ncol(data_input)))
 
@@ -156,7 +171,7 @@ distance_results_slag1 <- list(
   residual_stats = residual_stats,
   estimation_time= estimation_time,
   spatial_weights= "distance",
-  orders         = list(p=p_order, d=d_order, q=q_order, max_spatial_lag=1)
+  orders         = list(p=p_order, d=d_order, q=q_order, P=P_order, D=D_order, Q=Q_order, s=seasonal_period, max_spatial_lag=max_spatial_lag)
 )
 
 save(distance_results_slag1, file = "output/11_starima_distance_slag1.RData")

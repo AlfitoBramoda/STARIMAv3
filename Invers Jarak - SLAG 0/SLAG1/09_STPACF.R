@@ -6,7 +6,7 @@
 
 # Load data
 load("output/05_differencing_results.RData")
-load("output/07_spatial_weights_idw.RData")
+load("output/07_spatial_weights_distance.RData")
 load("output/08_stacf_distance_only.RData")  # Use fixed STACF results
 
 cat("=== STARMA STPACF ANALYSIS (distance only) - FIXED ===\n")

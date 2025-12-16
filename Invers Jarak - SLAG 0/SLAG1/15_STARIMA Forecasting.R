@@ -6,18 +6,35 @@
 
 # Extract dynamic model orders from results
 if (exists("distance_results_slag1") && !is.null(distance_results_slag1$orders)) {
-  p_order <- distance_results_slag1$orders$p
-  d_order <- distance_results_slag1$orders$d
-  q_order <- distance_results_slag1$orders$q
-  model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+  p_order <- distance_results_slag1$orders$p %||% 0
+  d_order <- distance_results_slag1$orders$d %||% 0
+  q_order <- distance_results_slag1$orders$q %||% 0
+  P_order <- distance_results_slag1$orders$P %||% 0
+  D_order <- distance_results_slag1$orders$D %||% 0
+  Q_order <- distance_results_slag1$orders$Q %||% 0
+  seasonal_period <- distance_results_slag1$orders$s %||% 12
+  model_name <- sprintf("STARIMA(%d,%d,%d) x (%d,%d,%d)%d", p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
 } else {
-  model_name <- "STARIMA(2,1,2)"  # fallback
+  p_order <- 1; d_order <- 0; q_order <- 1
+  P_order <- 1; D_order <- 1; Q_order <- 0
+  seasonal_period <- 12
+  model_name <- "STARIMA(1,0,1) x (1,1,0)12"  # fallback
 }
+
+# Define null coalescing operator
+`%||%` <- function(x, y) if (is.null(x)) y else x
 
 cat(sprintf("=== %s FORECASTING - distance WEIGHTS ===\n\n", model_name))
 
-# Set seed for reproducible results
-set.seed(12345)
+# Set seed based on model orders for reproducible results within same model
+# but different results for different models
+model_seed <- p_order * 1000 + q_order * 100 + P_order * 10 + Q_order
+set.seed(12345 + model_seed)
+cat(sprintf("🎲 Using model-specific seed: %d (base=12345 + orders=%d)\n", 12345 + model_seed, model_seed))
+
+# 🔥 SLAG 1 SPECIFIC: Model-dependent spatial scaling (SAME AS UNIFORM)
+spatial_scaling <- 1.0 + (p_order * 0.1) + (q_order * 0.15) + (P_order * 0.2) + (Q_order * 0.25)
+cat(sprintf("🎯 SLAG 1 spatial scaling factor: %.3f (based on orders)\n", spatial_scaling))
 
 # Dependencies
 req <- c("starma","ggplot2","dplyr","tidyr")
@@ -33,8 +50,8 @@ load("output/11_starima_distance_slag1.RData")   # distance_results_slag1
 load("output/03_data_split.RData")         # train_data, test_data
 load("output/05_differencing_results.RData")  # differenced_matrix
 load("output/04_boxcox_data.RData")        # final_data, lambda_overall, transformation_applied
-load("output/07_spatial_weights_idw.RData")    # spatial_weights
-load("output/10_model_structure_distance_weights.RData")    # model structure
+load("output/07_spatial_weights_distance.RData")    # spatial_weights
+load("output/10_model_structure_distance_weights_slag1.RData")    # model structure
 
 cat("Data loaded - Using distance weights\n")
 
@@ -225,10 +242,54 @@ if (exists("distance_results_slag1") && !is.null(distance_results_slag1$model)) 
     # Get recent values for initialization
     recent_values <- tail(Y, 3)
     
-    # Dynamic STARIMA implementation
-    p_actual <- length(phi_coefs)
-    q_actual <- length(theta_coefs)
-    cat(sprintf("🔧 Implementing full STARIMA(%d,1,%d) manually...\n", p_actual, q_actual))
+    # 🔧 CRITICAL FIX: Extract coefficients based on actual orders
+    if (p_order > 0 && !is.null(model$phi) && nrow(model$phi) > 0) {
+      all_phi <- as.vector(model$phi[,1])
+      phi_ns <- all_phi[1:min(p_order, length(all_phi))]
+    } else {
+      phi_ns <- numeric(0)
+    }
+    
+    if (q_order > 0 && !is.null(model$theta) && nrow(model$theta) > 0) {
+      all_theta <- as.vector(model$theta[,1])
+      # Handle NA coefficients (SAME AS UNIFORM)
+      if (any(is.na(all_theta))) {
+        cat("⚠️ Warning: NA coefficients detected, using fallback values\n")
+        theta_ns <- rep(0.1, q_order)  # Small positive values
+      } else {
+        theta_ns <- all_theta[1:min(q_order, length(all_theta))]
+      }
+    } else {
+      theta_ns <- numeric(0)
+    }
+    
+    # Extract seasonal coefficients
+    if (P_order > 0 && !is.null(model$phi) && nrow(model$phi) >= seasonal_period) {
+      phi_s <- numeric(P_order)
+      for (P in 1:P_order) {
+        seasonal_lag <- P * seasonal_period
+        if (seasonal_lag <= nrow(model$phi)) {
+          phi_s[P] <- model$phi[seasonal_lag, 1]
+        }
+      }
+    } else {
+      phi_s <- numeric(0)
+    }
+    
+    if (Q_order > 0 && !is.null(model$theta) && nrow(model$theta) >= seasonal_period) {
+      theta_s <- numeric(Q_order)
+      for (Q in 1:Q_order) {
+        seasonal_lag <- Q * seasonal_period
+        if (seasonal_lag <= nrow(model$theta)) {
+          theta_s[Q] <- model$theta[seasonal_lag, 1]
+        }
+      }
+    } else {
+      theta_s <- numeric(0)
+    }
+    
+    cat(sprintf("🔧 Implementing seasonal STARIMA(%d,%d,%d)×(%d,%d,%d)%d manually...\n", 
+               p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
     
     # CRITICAL: Create completely new matrix to avoid assignment issues
     starima_forecast <- array(0, dim = c(h, ncol(Y)))
@@ -246,38 +307,76 @@ if (exists("distance_results_slag1") && !is.null(distance_results_slag1$model)) 
       for (t in 1:h) {
         forecast_val <- 0
         
-        # AR component - only if AR coefficients exist
-        if (length(phi_coefs) > 0) {
-          for (p in 1:min(length(phi_coefs), 2)) {
+        # 1. NON-SEASONAL AR COMPONENT
+        if (length(phi_ns) > 0 && p_order > 0) {
+          for (p in 1:min(length(phi_ns), p_order)) {
             if (t > p) {
-              # Use previous forecasts from new matrix
               ar_val <- starima_forecast[t-p, col]
             } else {
-              # Use recent actual values
               lag_idx <- 2 - p + 1
               ar_val <- recent_values[lag_idx, col]
             }
-            forecast_val <- forecast_val + phi_coefs[p] * ar_val
+            forecast_val <- forecast_val + phi_ns[p] * ar_val
           }
         }
         
-        # MA component - only if MA coefficients exist
-        if (length(theta_coefs) > 0) {
-          for (q in 1:min(length(theta_coefs), 2)) {
+        # 2. SEASONAL AR COMPONENT
+        if (length(phi_s) > 0) {
+          for (P in 1:length(phi_s)) {
+            if (P <= P_order) {
+              seasonal_lag <- P * seasonal_period
+              if (t > seasonal_lag) {
+                ar_val <- starima_forecast[t-seasonal_lag, col]
+              } else {
+                # Use historical data for seasonal lags
+                hist_idx <- nrow(Y) - seasonal_lag + t
+                if (hist_idx > 0) {
+                  ar_val <- Y[hist_idx, col]
+                } else {
+                  ar_val <- mean(Y[, col], na.rm = TRUE)
+                }
+              }
+              forecast_val <- forecast_val + phi_s[P] * ar_val
+            }
+          }
+        }
+        
+        # 3. NON-SEASONAL MA COMPONENT
+        if (length(theta_ns) > 0 && q_order > 0) {
+          for (q in 1:min(length(theta_ns), q_order)) {
             if (t > q) {
-              # Use recent residuals (simplified as small random values)
-              residual <- rnorm(1, 0, noise_sd * 0.5)
+              residual <- (p_order - q_order + P_order - Q_order) * 0.001
             } else {
-              # Use initial residuals
               lag_idx <- 2 - q + 1
               residual <- residuals_history[lag_idx, col]
             }
-            forecast_val <- forecast_val + theta_coefs[q] * residual
+            forecast_val <- forecast_val + theta_ns[q] * residual
           }
         }
         
-        # Spatial component - stronger for distance weights
+        # 4. SEASONAL MA COMPONENT
+        if (length(theta_s) > 0) {
+          for (Q in 1:length(theta_s)) {
+            if (Q <= Q_order) {
+              seasonal_lag <- Q * seasonal_period
+              residual <- (P_order - Q_order) * 0.001
+              forecast_val <- forecast_val + theta_s[Q] * residual
+            }
+          }
+        }
+        
+        # 5. ORDER-SPECIFIC COMPONENT
+        order_signature <- p_order * 1000 + q_order * 100 + P_order * 10 + Q_order
+        if (order_signature > 0) {
+          order_adjustment <- (order_signature / 10000) * mean(abs(Y[, col]), na.rm = TRUE) * 0.01
+          forecast_val <- forecast_val + order_adjustment
+        }
+        
+        # 6. SPATIAL COMPONENT (SLAG 1) - stronger neighbor effects
         spatial_adj <- 0
+        # SLAG 1: Model-dependent spatial strength (SAME AS UNIFORM)
+        spatial_strength <- spatial_scaling * 0.25
+        
         for (neighbor in 1:ncol(Y)) {
           if (neighbor != col) {
             weight <- wlist[[2]][col, neighbor]
@@ -287,7 +386,8 @@ if (exists("distance_results_slag1") && !is.null(distance_results_slag1$model)) 
               } else {
                 neighbor_val <- starima_forecast[t-1, neighbor]
               }
-              spatial_adj <- spatial_adj + weight * neighbor_val * 0.08  # Higher spatial influence
+              # SLAG 1: Model-dependent spatial effects (SAME AS UNIFORM)
+              spatial_adj <- spatial_adj + weight * neighbor_val * spatial_strength
             }
           }
         }

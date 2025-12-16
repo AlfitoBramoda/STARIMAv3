@@ -1,12 +1,12 @@
 # ============================================================================
-# STARIMA Model Evaluation - distance Weights Only
-# File   : 16_Compare_distance_Only.R
-# Purpose: Evaluasi hasil forecasting STARIMA dengan bobot distance
+# STARIMA Model Evaluation - distance Weights SLAG 1
+# File   : 16_Compare_distance_SLAG1.R
+# Purpose: Evaluasi hasil forecasting STARIMA dengan bobot distance SLAG 1
 # Author  : STARMA Analysis
 # Date    : 2025
 # ============================================================================
 
-cat("=== STARIMA FORECAST EVALUATION (distance WEIGHTS ONLY) ===\n\n")
+cat("=== STARIMA FORECAST EVALUATION (distance WEIGHTS SLAG 1) ===\n\n")
 
 # ----------------------------------------------------------------------------
 # Dependencies
@@ -34,8 +34,8 @@ cat("✅ distance forecast results loaded successfully\n\n")
 # ----------------------------------------------------------------------------
 # Display Evaluation Metrics
 # ----------------------------------------------------------------------------
-cat("📊 MODEL PERFORMANCE METRICS (distance Weights)\n")
-cat("==============================================\n")
+cat("📊 MODEL PERFORMANCE METRICS (distance Weights SLAG 1)\n")
+cat("=====================================================\n")
 
 distance_metrics <- results_distance$metrics
 print(distance_metrics)
@@ -58,16 +58,16 @@ print(summary_distance)
 if (!dir.exists("plots")) dir.create("plots")
 
 p1 <- ggplot(distance_metrics, aes(x = Region, y = RMSE)) +
-  geom_col(fill = "#27AE60", alpha = 0.8) +
+  geom_col(fill = "#E74C3C", alpha = 0.8) +
   geom_text(aes(label = round(RMSE, 3)), vjust = -0.4, size = 3) +
-  labs(title = "STARIMA Forecast Performance (distance Weights)",
-       subtitle = "RMSE per Region (Lower is Better)",
+  labs(title = "STARIMA Forecast Performance (distance Weights SLAG 1)",
+       subtitle = "RMSE per Region (Lower is Better) - Neighbor Effects Included",
        x = "Region", y = "RMSE") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         plot.title = element_text(hjust = 0.5))
 
-ggsave("plots/16_distance_rmse_per_region.png", p1, width = 10, height = 6, dpi = 300)
+ggsave("plots/16_distance_rmse_per_region_slag1.png", p1, width = 10, height = 6, dpi = 300)
 print(p1)
 
 # ----------------------------------------------------------------------------
@@ -101,23 +101,23 @@ for (region in colnames(test_data)) {
       Forecast = as.numeric(forecast_data[, region])
     )
   } else {
-    cat("   ⚠ Forecast data not found for region:", region, "\n")
+    cat("   ⚠️ Forecast data not found for region:", region, "\n")
     next
   }
   
   p_region <- ggplot(df_plot, aes(x = Time)) +
     geom_line(aes(y = Actual), color = "black", size = 1.2, alpha = 0.8) +
     geom_point(aes(y = Actual), color = "black", size = 1.5) +
-    geom_line(aes(y = Forecast), color = "#27AE60", linetype = "dashed", size = 1) +
-    geom_point(aes(y = Forecast), color = "#27AE60", size = 1.5) +
-    labs(title = paste("Forecast vs Actual -", region),
-         subtitle = paste0("RMSE: ", round(distance_metrics$RMSE[distance_metrics$Region == region], 3)),
+    geom_line(aes(y = Forecast), color = "#E74C3C", linetype = "dashed", size = 1) +
+    geom_point(aes(y = Forecast), color = "#E74C3C", size = 1.5) +
+    labs(title = paste("Forecast vs Actual -", region, "(SLAG 1)"),
+         subtitle = paste0("RMSE: ", round(distance_metrics$RMSE[distance_metrics$Region == region], 3), " - Neighbor Effects"),
          x = "Time", y = "Rainfall (standardized)") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5))
   
-  ggsave(paste0("plots/16_distance_forecast_", region, ".png"), p_region, width = 10, height = 6, dpi = 300)
+  ggsave(paste0("plots/16_distance_forecast_", region, "_slag1.png"), p_region, width = 10, height = 6, dpi = 300)
   print(p_region)
 }
 
@@ -138,7 +138,7 @@ for (region in colnames(test_data)) {
       Forecast = as.numeric(forecast_data[, region])
     )
   } else {
-    cat("   ⚠ Skipping region:", region, "(no forecast data)\n")
+    cat("   ⚠️ Skipping region:", region, "(no forecast data)\n")
     next
   }
   
@@ -152,31 +152,32 @@ p_combined <- ggplot(all_long, aes(x = Time, y = Value, color = Type)) +
   geom_line(size = 1) +
   geom_point(size = 1.5) +
   facet_wrap(~Region, scales = "free_y", ncol = 2) +
-  labs(title = "STARIMA Forecast (distance Weights) - All Regions",
-       subtitle = "Black = Actual, Green Dashed = Forecast",
+  labs(title = "STARIMA Forecast (distance Weights SLAG 1) - All Regions",
+       subtitle = "Black = Actual, Red Dashed = Forecast - Neighbor Effects Included",
        x = "Time", y = "Rainfall (standardized)") +
-  scale_color_manual(values = c("Actual" = "black", "Forecast" = "#27AE60")) +
+  scale_color_manual(values = c("Actual" = "black", "Forecast" = "#E74C3C")) +
   theme_minimal() +
   theme(legend.position = "bottom",
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 
-ggsave("plots/16_distance_forecast_all_regions.png", p_combined, width = 14, height = 10, dpi = 300)
+ggsave("plots/16_distance_forecast_all_regions_slag1.png", p_combined, width = 14, height = 10, dpi = 300)
 print(p_combined)
 
 # ----------------------------------------------------------------------------
 # Save Evaluation Summary
 # ----------------------------------------------------------------------------
-evaluation_distance <- list(
+evaluation_distance_slag1 <- list(
   metrics = distance_metrics,
   summary = summary_distance,
   forecast_original_scale = forecast_data,
   forecast_all_scales = results_distance,  # Keep all forecast scales
-  test_data = test_data
+  test_data = test_data,
+  spatial_lag = 1
 )
 
-save(evaluation_distance, file = "output/16_distance_evaluation.RData")
+save(evaluation_distance_slag1, file = "output/16_distance_evaluation_slag1.RData")
 
-cat("\n💾 Evaluation results saved → output/16_distance_evaluation.RData\n")
+cat("\n💾 Evaluation results saved → output/16_distance_evaluation_slag1.RData\n")
 cat("📊 Plots saved in folder → plots/\n")
-cat("✅ STARIMA (distance) evaluation completed successfully!\n")
+cat("✅ STARIMA (distance SLAG 1) evaluation completed successfully!\n")
