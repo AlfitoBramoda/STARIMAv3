@@ -23,7 +23,7 @@ n_regions <- 5           # Number of regions
 max_spatial_lag <- 2     # Maximum spatial lag (from spatial weights)
 
 # 🧪 CUSTOM NON-SEASONAL PARAMETERS (EDIT THESE!):
-p_order <- 1             # Non-seasonal AR order (try: 1, 2, 3, 4)
+p_order <- 0             # Non-seasonal AR order (try: 1, 2, 3, 4)
 d_order <- 0             # Non-seasonal differencing (usually 0 or 1)
 q_order <- 1             # Non-seasonal MA order (try: 1, 2, 3)
 
@@ -46,32 +46,54 @@ n_observations <- 96     # Jumlah observasi training
 # HELPER FUNCTIONS
 # ============================================================================
 create_ar_mask <- function(p_order, max_spatial_lag) {
-  if (is.null(p_order) || is.na(p_order) || p_order <= 0) p_order <- 1
-  if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 1
+  # 🎯 RESEARCH MODE: Handle ALL orders including 0 for real comparison
+  if (is.null(p_order) || is.na(p_order)) p_order <- 0
+  if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
   
-  # FIXED: Create parsimonious mask
+  # For zero AR order - create minimal mask
+  if (p_order == 0) {
+    ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = 1)
+    cat(sprintf("🔬 RESEARCH: AR order = 0, mask = %dx%d, params = %d\n", 
+               nrow(ar_mask), ncol(ar_mask), sum(ar_mask)))
+    return(ar_mask)
+  }
+  
+  # For non-zero AR order - create proper mask
   ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = p_order)
   
-  # Only activate essential parameters to avoid overfitting
-  ar_mask[1, 1] <- 1  # AR(1) spatial lag 0 - always include
-  if (p_order > 1) ar_mask[1, 2] <- 1  # AR(2) spatial lag 0
-  if (max_spatial_lag > 0) ar_mask[2, 1] <- 1  # AR(1) spatial lag 1
+  # Activate temporal lags only (no spatial for simplicity)
+  for (p in 1:p_order) {
+    ar_mask[1, p] <- 1  # Temporal lag p, spatial lag 0
+  }
   
+  cat(sprintf("🔬 RESEARCH: AR order = %d, mask = %dx%d, params = %d\n", 
+             p_order, nrow(ar_mask), ncol(ar_mask), sum(ar_mask)))
   return(ar_mask)
 }
 
 create_ma_mask <- function(q_order, max_spatial_lag) {
-  if (is.null(q_order) || is.na(q_order) || q_order <= 0) q_order <- 1
-  if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 1
+  # 🎯 RESEARCH MODE: Handle ALL orders including 0 for real comparison
+  if (is.null(q_order) || is.na(q_order)) q_order <- 0
+  if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
   
-  # FIXED: Create parsimonious mask
+  # For zero MA order - create minimal mask
+  if (q_order == 0) {
+    ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = 1)
+    cat(sprintf("🔬 RESEARCH: MA order = 0, mask = %dx%d, params = %d\n", 
+               nrow(ma_mask), ncol(ma_mask), sum(ma_mask)))
+    return(ma_mask)
+  }
+  
+  # For non-zero MA order - create proper mask
   ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = q_order)
   
-  # Only activate essential parameters to avoid overfitting
-  ma_mask[1, 1] <- 1  # MA(1) spatial lag 0 - always include
-  if (q_order > 1) ma_mask[1, 2] <- 1  # MA(2) spatial lag 0
-  if (max_spatial_lag > 0) ma_mask[2, 1] <- 1  # MA(1) spatial lag 1
+  # Activate temporal lags only (no spatial for simplicity)
+  for (q in 1:q_order) {
+    ma_mask[1, q] <- 1  # Temporal lag q, spatial lag 0
+  }
   
+  cat(sprintf("🔬 RESEARCH: MA order = %d, mask = %dx%d, params = %d\n", 
+             q_order, nrow(ma_mask), ncol(ma_mask), sum(ma_mask)))
   return(ma_mask)
 }
 
@@ -116,48 +138,26 @@ plots <- list()
 
 cat("\n📊 Processing weight type:", weight_type, "\n")
 
-ar_obj <- NULL
-ma_obj <- NULL
-
-tryCatch({
-  ar_obj <- get(paste0(weight_type, "_ar"), envir = .GlobalEnv)
-}, error = function(e) {
-  cat("⚠️ Warning:", paste0(weight_type, "_ar"), "not found, using default\n")
-})
-
-tryCatch({
-  ma_obj <- get(paste0(weight_type, "_ma"), envir = .GlobalEnv)
-}, error = function(e) {
-  cat("⚠️ Warning:", paste0(weight_type, "_ma"), "not found, using default\n")
-})
-
-# 🚫 AUTO-IDENTIFICATION DISABLED FOR CUSTOM ORDERS
-# Uncomment below to use auto-identified orders instead of custom:
-# if (file.exists("output/09_stpacf_uniform_only.RData")) {
-#   load("output/09_stpacf_uniform_only.RData")
-#   if (exists("uniform_ar") && !is.null(uniform_ar$suggested_p)) {
-#     p_order <- uniform_ar$suggested_p
-#   }
-#   if (exists("uniform_ma") && !is.null(uniform_ma$suggested_q)) {
-#     q_order <- uniform_ma$suggested_q
-#   }
-# }
-
 cat("🎯 CUSTOM Seasonal STARIMA Configuration:\n")
 cat(sprintf("- Model: STARIMA(%d,%d,%d) × (%d,%d,%d)%d\n", 
            p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 cat("- Source: CUSTOM orders (auto-identification disabled)\n")
 
-# Calculate seasonal STARIMA parameters with parsimonious approach
-max_spatial_lag <- 2  # Reduce spatial complexity
+# 🎯 RESEARCH MODE: Respect exact orders for real comparison
+max_spatial_lag <- 0  # Disable spatial for cleaner comparison
 
-# Create seasonal masks - combine non-seasonal and seasonal components
-total_ar_lags <- max(p_order, P_order * seasonal_period)
-total_ma_lags <- max(q_order, Q_order * seasonal_period)
+# Calculate exact temporal lags needed
+total_ar_lags <- p_order  # Use exact non-seasonal order
+total_ma_lags <- q_order  # Use exact non-seasonal order
 
-# Ensure minimum dimensions
-if (total_ar_lags == 0) total_ar_lags <- 1
-if (total_ma_lags == 0) total_ma_lags <- 1
+# Add seasonal lags if specified
+if (P_order > 0) total_ar_lags <- max(total_ar_lags, P_order * seasonal_period)
+if (Q_order > 0) total_ma_lags <- max(total_ma_lags, Q_order * seasonal_period)
+
+cat("🔬 RESEARCH MODE: Exact order handling\n")
+cat(sprintf("- Input orders: p=%d, d=%d, q=%d, P=%d, D=%d, Q=%d\n", 
+           p_order, d_order, q_order, P_order, D_order, Q_order))
+cat(sprintf("- Calculated temporal lags: AR=%d, MA=%d\n", total_ar_lags, total_ma_lags))
 
 # Use the fixed mask creation functions
 ar_mask <- create_ar_mask(total_ar_lags, max_spatial_lag)
@@ -172,7 +172,7 @@ total_ar_params <- sum(ar_mask)
 total_ma_params <- sum(ma_mask)
 total_params <- total_ar_params + total_ma_params
 complexity_ratio <- total_params / n_observations
-parsimony_score <- n_observations / total_params
+parsimony_score <- if(total_params > 0) n_observations / total_params else Inf
 df <- n_observations - total_params
 complexity_level <- if (complexity_ratio < 0.1) "LOW" else if (complexity_ratio < 0.2) "MODERATE" else "HIGH"
 df_assessment <- if (df > 50) "SUFFICIENT" else if (df > 20) "ADEQUATE" else "LIMITED"
@@ -197,9 +197,11 @@ model_structures[[weight_type]] <- list(
   ma_mask = ma_mask,
   # Non-seasonal orders
   ar_order = p_order,
+  d_order = d_order,  # FIXED: Add missing d_order
   ma_order = q_order,
   # Seasonal orders
   seasonal_ar_order = P_order,
+  seasonal_d_order = D_order,  # FIXED: Add missing D_order
   seasonal_ma_order = Q_order,
   seasonal_period = seasonal_period,
   # Parameter counts
@@ -226,13 +228,42 @@ cat("- Total parameters:", total_params, "\n")
 cat("- Complexity level:", complexity_level, "\n")
 cat("- Degrees of freedom:", df, "(", df_assessment, ")\n")
 
+# 🔍 DEBUG: Print detailed mask information
+cat("\n🔍 DETAILED MASK DEBUG:\n")
+cat("======================\n")
+cat(sprintf("Input orders: p=%d, d=%d, q=%d, P=%d, D=%d, Q=%d\n", 
+           p_order, d_order, q_order, P_order, D_order, Q_order))
+cat(sprintf("Calculated total lags: AR=%d, MA=%d\n", total_ar_lags, total_ma_lags))
+cat(sprintf("AR mask dimensions: %dx%d\n", nrow(ar_mask), ncol(ar_mask)))
+cat(sprintf("MA mask dimensions: %dx%d\n", nrow(ma_mask), ncol(ma_mask)))
+cat("AR mask content:\n")
+print(ar_mask)
+cat("MA mask content:\n")
+print(ma_mask)
+cat(sprintf("Active AR parameters: %d\n", sum(ar_mask)))
+cat(sprintf("Active MA parameters: %d\n", sum(ma_mask)))
+cat(sprintf("Total active parameters: %d\n", sum(ar_mask) + sum(ma_mask)))
+cat("======================\n")
+
 # ============================================================================
 # SAVE RESULTS
 # ============================================================================
 save(model_structures, plots, file = "output/10_model_structure_uniform_weights.RData")
 
-cat("\n✅ Seasonal STARIMA model structure for uniform weights saved to 'output/10_model_structure_uniform_weights.RData'\n")
-cat(sprintf("✅ Model: STARIMA(%d,%d,%d) × (%d,%d,%d)%d\n", 
+cat("\n💾 RESULTS SAVED:\n")
+cat("================\n")
+cat("✅ Model structures saved to: output/10_model_structure_uniform_weights.RData\n")
+cat("✅ All orders properly saved:\n")
+cat(sprintf("   • p_order = %d (saved as ar_order)\n", p_order))
+cat(sprintf("   • d_order = %d (saved as d_order)\n", d_order))
+cat(sprintf("   • q_order = %d (saved as ma_order)\n", q_order))
+cat(sprintf("   • P_order = %d (saved as seasonal_ar_order)\n", P_order))
+cat(sprintf("   • D_order = %d (saved as seasonal_d_order)\n", D_order))
+cat(sprintf("   • Q_order = %d (saved as seasonal_ma_order)\n", Q_order))
+cat(sprintf("   • seasonal_period = %d\n", seasonal_period))
+cat("✅ Masks and integration info included\n")
+
+cat("\n=== MODEL STRUCTURE DEFINITION COMPLETED ===\n")
+cat(sprintf("🎯 Final Model: STARIMA(%d,%d,%d) × (%d,%d,%d)%d\n", 
            p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
-cat("✅ Seasonal integration orders (p,d,q,P,D,Q,s) added to model\n")
-cat("🎯 Ready for seasonal STARIMA estimation for uniform weight type\n")
+cat("📊 Next step: 11_STARIMA_Estimation.R\n")

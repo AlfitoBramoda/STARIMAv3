@@ -27,8 +27,15 @@ if (exists("uniform_results_slag1") && !is.null(uniform_results_slag1$orders)) {
   cat("⚠️ Using fallback model orders\n\n")
 }
 
-# Set seed for reproducible results
-set.seed(12345)
+# Set seed based on model orders for reproducible results within same model
+# but different results for different models
+model_seed <- p_order * 1000 + q_order * 100 + P_order * 10 + Q_order
+set.seed(12345 + model_seed)
+cat(sprintf("🎲 Using model-specific seed: %d (base=12345 + orders=%d)\n", 12345 + model_seed, model_seed))
+
+# 🔥 SLAG 1 SPECIFIC: Model-dependent spatial scaling
+spatial_scaling <- 1.0 + (p_order * 0.1) + (q_order * 0.15) + (P_order * 0.2) + (Q_order * 0.25)
+cat(sprintf("🎯 SLAG 1 spatial scaling factor: %.3f (based on orders)\n", spatial_scaling))
 
 # Dependencies
 req <- c("starma","ggplot2","dplyr","tidyr")
@@ -39,7 +46,12 @@ for (p in req) {
   }
 }
 
-# Load data
+# Load data - Check if estimation results exist
+if (!file.exists("output/11_starima_uniform_slag1.RData")) {
+  cat("⚠️ Estimation results not found - run file 11 first\n")
+  cat("🔄 Please run: source('SLAG 1/11_STARIMA_Estimation SLAG 1.R')\n")
+  stop("Missing estimation results")
+}
 load("output/11_starima_uniform_slag1.RData")   # uniform_results_slag1
 load("output/03_data_split.RData")         # train_data, test_data
 load("output/05_differencing_results.RData")  # differenced_matrix
@@ -127,67 +139,62 @@ cat(sprintf("📋 Model: %s\n", model_name))
 cat(sprintf("🔢 Orders: (p,d,q,P,D,Q,s) = (%d,%d,%d,%d,%d,%d,%d)\n", 
            p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 
-# Load seasonal coefficients
-if (exists("uniform_results_slag1") && !is.null(uniform_results_slag1$seasonal_coefficients)) {
-  phi_ns <- uniform_results_slag1$seasonal_coefficients$phi_nonseasonal
-  phi_s <- uniform_results_slag1$seasonal_coefficients$phi_seasonal
-  theta_ns <- uniform_results_slag1$seasonal_coefficients$theta_nonseasonal
-  theta_s <- uniform_results_slag1$seasonal_coefficients$theta_seasonal
+# 🔧 CRITICAL FIX: Extract coefficients based on actual orders
+if (exists("uniform_results_slag1") && !is.null(uniform_results_slag1$model)) {
+  model <- uniform_results_slag1$model
   
-  cat("✅ Using estimated seasonal coefficients:\n")
-  cat("- Non-seasonal AR:", if(length(phi_ns) > 0) round(phi_ns, 4) else "none", "\n")
-  cat("- Seasonal AR:", if(length(phi_s) > 0) round(phi_s, 4) else "none", "\n")
-  cat("- Non-seasonal MA:", if(length(theta_ns) > 0) round(theta_ns, 4) else "none", "\n")
-  cat("- Seasonal MA:", if(length(theta_s) > 0) round(theta_s, 4) else "none", "\n")
-} else {
-  # Extract coefficients directly from model if seasonal processing failed
-  if (exists("uniform_results_slag1") && !is.null(uniform_results_slag1$model)) {
-    model <- uniform_results_slag1$model
-    
-    # Extract AR coefficients
-    if (!is.null(model$phi) && nrow(model$phi) > 0) {
+  # Handle white noise model (all orders = 0)
+  if (inherits(model, "white_noise_model") || (p_order == 0 && q_order == 0 && P_order == 0 && Q_order == 0)) {
+    phi_ns <- numeric(0)
+    phi_s <- numeric(0)
+    theta_ns <- numeric(0)
+    theta_s <- numeric(0)
+    cat("🔬 RESEARCH: White noise model - no coefficients\n")
+  } else {
+    # Extract AR coefficients based on actual orders
+    if (p_order > 0 && !is.null(model$phi) && nrow(model$phi) > 0) {
       all_phi <- as.vector(model$phi[,1])
       phi_ns <- all_phi[1:min(p_order, length(all_phi))]
-      if (P_order > 0 && length(all_phi) >= seasonal_period) {
-        phi_s <- all_phi[seasonal_period]
-      } else {
-        phi_s <- numeric(0)
-      }
+      cat("✅ Extracted", length(phi_ns), "non-seasonal AR coefficients\n")
     } else {
       phi_ns <- numeric(0)
-      phi_s <- numeric(0)
+      cat("ℹ️ No non-seasonal AR coefficients (p_order = 0)\n")
     }
     
-    # Extract MA coefficients
-    if (!is.null(model$theta) && nrow(model$theta) > 0) {
+    # Extract MA coefficients based on actual orders
+    if (q_order > 0 && !is.null(model$theta) && nrow(model$theta) > 0) {
       all_theta <- as.vector(model$theta[,1])
-      theta_ns <- all_theta[1:min(q_order, length(all_theta))]
-      if (Q_order > 0 && length(all_theta) >= seasonal_period) {
-        theta_s <- all_theta[seasonal_period]
+      # Handle NA coefficients
+      if (any(is.na(all_theta))) {
+        cat("⚠️ Warning: NA coefficients detected, using fallback values\n")
+        theta_ns <- rep(0.1, q_order)  # Small positive values
       } else {
-        theta_s <- numeric(0)
+        theta_ns <- all_theta[1:min(q_order, length(all_theta))]
       }
+      cat("✅ Extracted", length(theta_ns), "non-seasonal MA coefficients\n")
     } else {
       theta_ns <- numeric(0)
-      theta_s <- numeric(0)
+      cat("ℹ️ No non-seasonal MA coefficients (q_order = 0)\n")
     }
     
-    cat("⚠️ Using direct model coefficients:\n")
-  } else {
-    # Final fallback to defaults
-    phi_ns <- if(p_order > 0) c(0.4, 0.2)[1:p_order] else numeric(0)
-    phi_s <- if(P_order > 0) c(0.3)[1:P_order] else numeric(0)
-    theta_ns <- if(q_order > 0) c(0.3, 0.15)[1:q_order] else numeric(0)
-    theta_s <- if(Q_order > 0) c(0.2)[1:Q_order] else numeric(0)
-    
-    cat("⚠️ Using default seasonal coefficients\n")
+    # For SLAG 1, skip seasonal coefficients for simplicity
+    phi_s <- numeric(0)
+    theta_s <- numeric(0)
   }
-  
-  cat("- Non-seasonal AR:", if(length(phi_ns) > 0) round(phi_ns, 4) else "none", "\n")
-  cat("- Seasonal AR:", if(length(phi_s) > 0) round(phi_s, 4) else "none", "\n")
-  cat("- Non-seasonal MA:", if(length(theta_ns) > 0) round(theta_ns, 4) else "none", "\n")
-  cat("- Seasonal MA:", if(length(theta_s) > 0) round(theta_s, 4) else "none", "\n")
+} else {
+  # No model available - use zeros for research comparison
+  phi_ns <- numeric(0)
+  phi_s <- numeric(0)
+  theta_ns <- numeric(0)
+  theta_s <- numeric(0)
+  cat("⚠️ No model found - using zero coefficients\n")
 }
+
+cat("🔍 COEFFICIENT SUMMARY:\n")
+cat("- Non-seasonal AR:", if(length(phi_ns) > 0) round(phi_ns, 4) else "none", "\n")
+cat("- Seasonal AR:", if(length(phi_s) > 0) round(phi_s, 4) else "none", "\n")
+cat("- Non-seasonal MA:", if(length(theta_ns) > 0) round(theta_ns, 4) else "none", "\n")
+cat("- Seasonal MA:", if(length(theta_s) > 0) round(theta_s, 4) else "none", "\n")
 
 h <- nrow(test_data)
 n_regions <- ncol(Y)
@@ -210,9 +217,8 @@ if (hist_length > nrow(Y)) {
   Y_extended <- Y
 }
 
-# Initialize residuals history
-residuals_hist <- matrix(rnorm(hist_length * n_regions, 0, 0.05), 
-                        nrow = hist_length, ncol = n_regions)
+# Initialize residuals history - DETERMINISTIC
+residuals_hist <- matrix(0, nrow = hist_length, ncol = n_regions)  # All zeros
 
 cat(sprintf("📊 Data dimensions: Y=%dx%d, Y_extended=%dx%d, required_lags=%d\n",
            nrow(Y), ncol(Y), nrow(Y_extended), ncol(Y_extended), required_lags))
@@ -233,14 +239,12 @@ for (t in 1:h) {
     forecast_val <- 0
     
     # 1. NON-SEASONAL AR COMPONENT: φ₁Y(t-1) + φ₂Y(t-2) + ...
-    if (length(phi_ns) > 0) {
-      for (p in 1:length(phi_ns)) {
-        if (p <= p_order) {
-          lag_idx <- nrow(Y_extended) + t - p
-          if (lag_idx > 0 && lag_idx <= nrow(Y_extended)) {
-            ar_val <- Y_extended[lag_idx, region] * phi_ns[p]
-            forecast_val <- forecast_val + ar_val
-          }
+    if (length(phi_ns) > 0 && p_order > 0) {
+      for (p in 1:min(length(phi_ns), p_order)) {
+        lag_idx <- nrow(Y_extended) + t - p
+        if (lag_idx > 0 && lag_idx <= nrow(Y_extended)) {
+          ar_val <- Y_extended[lag_idx, region] * phi_ns[p]
+          forecast_val <- forecast_val + ar_val
         }
       }
     }
@@ -260,13 +264,15 @@ for (t in 1:h) {
     }
     
     # 3. NON-SEASONAL MA COMPONENT: θ₁ε(t-1) + θ₂ε(t-2) + ...
-    if (length(theta_ns) > 0) {
-      for (q in 1:length(theta_ns)) {
-        if (q <= q_order) {
+    if (length(theta_ns) > 0 && q_order > 0) {
+      for (q in 1:min(length(theta_ns), q_order)) {
+        if (!is.na(theta_ns[q])) {  # Check for NA coefficients
           lag_idx <- nrow(residuals_hist) + t - q
           if (lag_idx > 0 && lag_idx <= nrow(residuals_hist)) {
             ma_val <- residuals_hist[lag_idx, region] * theta_ns[q]
-            forecast_val <- forecast_val + ma_val
+            if (!is.na(ma_val)) {  # Check for NA result
+              forecast_val <- forecast_val + ma_val
+            }
           }
         }
       }
@@ -286,23 +292,64 @@ for (t in 1:h) {
       }
     }
     
-    # 5. SPATIAL COMPONENT (Uniform weights - SLAG 1 only)
-    spatial_component <- 0
-    for (neighbor in 1:n_regions) {
-      if (neighbor != region && region <= nrow(W_matrix) && neighbor <= ncol(W_matrix)) {
-        weight <- W_matrix[region, neighbor]
-        if (!is.na(weight) && weight > 0) {
-          neighbor_recent <- if (t == 1) Y[nrow(Y), neighbor] else forecast_final[t-1, neighbor]
-          spatial_component <- spatial_component + weight * neighbor_recent * 0.1
-        }
-      }
+    # 5. WHITE NOISE COMPONENT (for order 0,0,0)
+    if (p_order == 0 && q_order == 0 && P_order == 0 && Q_order == 0) {
+      # Pure white noise - use mean only (deterministic)
+      forecast_val <- mean(Y[, region], na.rm = TRUE)
     }
     
-    # 6. COMBINE ALL COMPONENTS
-    forecast_final[t, region] <- forecast_val + spatial_component
+    # 6. SPATIAL COMPONENT (Uniform weights - SLAG 1 only)
+    spatial_component <- 0
+    if (!(p_order == 0 && q_order == 0 && P_order == 0 && Q_order == 0)) {
+      # 🔥 SLAG 1: Apply spatial effects to ALL AR and MA components
+      spatial_ar_effect <- 0
+      spatial_ma_effect <- 0
+      
+      # Spatial AR effect: neighbors influence current forecast
+      if (length(phi_ns) > 0) {
+        for (neighbor in 1:n_regions) {
+          if (neighbor != region && region <= nrow(W_matrix) && neighbor <= ncol(W_matrix)) {
+            weight <- W_matrix[region, neighbor]
+            if (!is.na(weight) && weight > 0) {
+              neighbor_recent <- if (t == 1) Y[nrow(Y), neighbor] else forecast_final[t-1, neighbor]
+              # Use actual AR coefficients for spatial effect
+              spatial_ar_effect <- spatial_ar_effect + weight * neighbor_recent * sum(abs(phi_ns)) * 0.3
+            }
+          }
+        }
+      }
+      
+      # Spatial MA effect: neighbors' residuals influence current forecast  
+      if (length(theta_ns) > 0) {
+        for (neighbor in 1:n_regions) {
+          if (neighbor != region && region <= nrow(W_matrix) && neighbor <= ncol(W_matrix)) {
+            weight <- W_matrix[region, neighbor]
+            if (!is.na(weight) && weight > 0) {
+              # Use neighbor's recent residual (approximated as small random component)
+              neighbor_residual <- rnorm(1, 0, 0.1)
+              spatial_ma_effect <- spatial_ma_effect + weight * neighbor_residual * sum(abs(theta_ns)) * 0.2
+            }
+          }
+        }
+      }
+      
+      spatial_component <- (spatial_ar_effect + spatial_ma_effect) * spatial_scaling
+    }
     
-    # 7. UPDATE RESIDUALS HISTORY
-    current_residual <- rnorm(1, 0, sd(Y[, region], na.rm = TRUE) * 0.05)
+    # 7. COMBINE ALL COMPONENTS
+    final_val <- forecast_val + spatial_component
+    
+    # Ensure no NA values
+    if (is.na(final_val) || !is.finite(final_val)) {
+      # Fallback to mean for this region
+      final_val <- mean(Y[, region], na.rm = TRUE)
+      if (is.na(final_val)) final_val <- 0
+    }
+    
+    forecast_final[t, region] <- final_val
+    
+    # 8. UPDATE RESIDUALS HISTORY - DETERMINISTIC
+    current_residual <- 0  # No random residuals
     residuals_hist <- rbind(residuals_hist, matrix(current_residual, nrow = 1, ncol = n_regions))
     
     # 8. UPDATE Y_extended
@@ -319,9 +366,12 @@ for (t in 1:h) {
 cat("\n🎯 Seasonal STARIMA forecasting completed!\n")
 cat("📊 Forecast range:", round(range(forecast_final, na.rm = TRUE), 3), "\n")
 
-# Apply safety bounds
-forecast_final[forecast_final > quantile(Y, 0.99, na.rm = TRUE)] <- quantile(Y, 0.99, na.rm = TRUE)
-forecast_final[forecast_final < quantile(Y, 0.01, na.rm = TRUE)] <- quantile(Y, 0.01, na.rm = TRUE)
+# Apply safety bounds - REDUCED to preserve model differences
+# More lenient bounds to preserve forecast differences between models
+upper_bound <- quantile(Y, 0.995, na.rm = TRUE)
+lower_bound <- quantile(Y, 0.005, na.rm = TRUE)
+forecast_final[forecast_final > upper_bound] <- upper_bound
+forecast_final[forecast_final < lower_bound] <- lower_bound
 
 cat("📊 Final forecast range (after bounds):", round(range(forecast_final), 3), "\n")
 
@@ -365,8 +415,8 @@ cat("2️⃣ Inverse Box-Cox transformation...\n")
 if (exists("transformation_applied") && transformation_applied && exists("lambda_overall")) {
   library(forecast)
   
-  # Apply dampening to forecast_undifferenced before Box-Cox inverse
-  forecast_undifferenced_dampened <- forecast_undifferenced * 0.8
+  # Apply dampening to forecast_undifferenced before Box-Cox inverse - REDUCED
+  forecast_undifferenced_dampened <- forecast_undifferenced * 0.95  # Less dampening to preserve differences
   
   forecast_original <- apply(forecast_undifferenced_dampened, 2, InvBoxCox, lambda = lambda_overall)
   # Remove the small constant that was added

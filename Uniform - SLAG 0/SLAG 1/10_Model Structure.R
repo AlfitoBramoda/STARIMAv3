@@ -25,11 +25,11 @@ max_spatial_lag <- 1     # Maximum spatial lag (SLAG 1 only)
 # 🧪 CUSTOM NON-SEASONAL PARAMETERS (EDIT THESE!):
 p_order <- 0             # Non-seasonal AR order (try: 1, 2, 3, 4)
 d_order <- 0             # Non-seasonal differencing (usually 0 or 1)
-q_order <- 0             # Non-seasonal MA order (try: 1, 2, 3)
+q_order <- 1             # Non-seasonal MA order (try: 1, 2, 3)
 
 # 🧪 CUSTOM SEASONAL PARAMETERS (EDIT THESE!):
-P_order <- 0             # Seasonal AR order (try: 0, 1, 2)
-D_order <- 0             # Seasonal differencing (keep at 1 for monthly data)
+P_order <- 1             # Seasonal AR order (try: 0, 1, 2)
+D_order <- 1             # Seasonal differencing (keep at 1 for monthly data)
 Q_order <- 0             # Seasonal MA order (try: 0, 1, 2)
 seasonal_period <- 12    # Seasonal period (keep at 12 for monthly)
 
@@ -46,40 +46,56 @@ n_observations <- 96     # Jumlah observasi training
 # HELPER FUNCTIONS
 # ============================================================================
 create_ar_mask <- function(p_order, max_spatial_lag) {
-  if (is.null(p_order) || is.na(p_order) || p_order <= 0) p_order <- 1
+  # 🎯 RESEARCH MODE: Handle ALL orders including 0 for real comparison
+  if (is.null(p_order) || is.na(p_order)) p_order <- 0
   if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 1
+  
+  # For zero AR order - create minimal mask
+  if (p_order == 0) {
+    ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = 1)
+    cat(sprintf("🔬 RESEARCH: AR order = 0, mask = %dx%d, params = %d\n", 
+               nrow(ar_mask), ncol(ar_mask), sum(ar_mask)))
+    return(ar_mask)
+  }
   
   # 🔥 SLAG 1 ONLY: Create mask with ONLY spatial lag 1
   ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = p_order)
   
-  # 🚫 DISABLE SLAG 0 - Only use SLAG 1 for pure SLAG 1 analysis
-  # ar_mask[1, 1] <- 1  # AR(1) spatial lag 0 - DISABLED
-  
-  # ✅ ONLY ACTIVATE SLAG 1
+  # ✅ ONLY ACTIVATE SLAG 1 (spatial lag 1)
   if (max_spatial_lag > 0) {
-    ar_mask[2, 1] <- 1  # AR(1) spatial lag 1 - ONLY SLAG 1
-    if (p_order > 1) ar_mask[2, 2] <- 1  # AR(2) spatial lag 1 if needed
-    cat("🔥 SLAG 1 ONLY AR mask: spatial lag 1 exclusively\n")
+    for (p in 1:p_order) {
+      ar_mask[2, p] <- 1  # AR(p) spatial lag 1 - ONLY SLAG 1
+    }
+    cat(sprintf("🔥 SLAG 1 ONLY AR mask: %dx%d, params = %d\n", 
+               nrow(ar_mask), ncol(ar_mask), sum(ar_mask)))
   }
   
   return(ar_mask)
 }
 
 create_ma_mask <- function(q_order, max_spatial_lag) {
-  if (is.null(q_order) || is.na(q_order) || q_order <= 0) q_order <- 1
+  # 🎯 RESEARCH MODE: Handle ALL orders including 0 for real comparison
+  if (is.null(q_order) || is.na(q_order)) q_order <- 0
   if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 1
+  
+  # For zero MA order - create minimal mask
+  if (q_order == 0) {
+    ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = 1)
+    cat(sprintf("🔬 RESEARCH: MA order = 0, mask = %dx%d, params = %d\n", 
+               nrow(ma_mask), ncol(ma_mask), sum(ma_mask)))
+    return(ma_mask)
+  }
   
   # 🔥 SLAG 1 ONLY: Create mask with ONLY spatial lag 1
   ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = q_order)
   
-  # 🚫 DISABLE SLAG 0 - Only use SLAG 1 for pure SLAG 1 analysis
-  # ma_mask[1, 1] <- 1  # MA(1) spatial lag 0 - DISABLED
-  
-  # ✅ ONLY ACTIVATE SLAG 1
+  # ✅ ONLY ACTIVATE SLAG 1 (spatial lag 1)
   if (max_spatial_lag > 0) {
-    ma_mask[2, 1] <- 1  # MA(1) spatial lag 1 - ONLY SLAG 1
-    if (q_order > 1) ma_mask[2, 2] <- 1  # MA(2) spatial lag 1 if needed
-    cat("🔥 SLAG 1 ONLY MA mask: spatial lag 1 exclusively\n")
+    for (q in 1:q_order) {
+      ma_mask[2, q] <- 1  # MA(q) spatial lag 1 - ONLY SLAG 1
+    }
+    cat(sprintf("🔥 SLAG 1 ONLY MA mask: %dx%d, params = %d\n", 
+               nrow(ma_mask), ncol(ma_mask), sum(ma_mask)))
   }
   
   return(ma_mask)
@@ -207,9 +223,11 @@ model_structures[[weight_type]] <- list(
   ma_mask = ma_mask,
   # Non-seasonal orders
   ar_order = p_order,
+  d_order = d_order,  # FIXED: Add missing d_order
   ma_order = q_order,
   # Seasonal orders
   seasonal_ar_order = P_order,
+  seasonal_d_order = D_order,  # FIXED: Add missing D_order
   seasonal_ma_order = Q_order,
   seasonal_period = seasonal_period,
   # Parameter counts

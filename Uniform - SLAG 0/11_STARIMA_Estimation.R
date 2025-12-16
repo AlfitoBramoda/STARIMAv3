@@ -52,10 +52,10 @@ if (file.exists("output/10_model_structure_uniform_weights.RData")) {
     
     # Extract ALL orders from File 10 (including d and D)
     p_order <- structure$ar_order %nz% 1
-    d_order <- structure$integration_order$d %nz% 0
+    d_order <- structure$d_order %nz% structure$integration_order$d %nz% 0  # FIXED: Read from correct location
     q_order <- structure$ma_order %nz% 1
     P_order <- structure$seasonal_ar_order %nz% 1
-    D_order <- structure$integration_order$D %nz% 1
+    D_order <- structure$seasonal_d_order %nz% structure$integration_order$D %nz% 1  # FIXED: Read from correct location
     Q_order <- structure$seasonal_ma_order %nz% 0
     seasonal_period <- structure$seasonal_period %nz% 12
     max_spatial_lag <- 1  # Keep spatial lag simple
@@ -63,6 +63,7 @@ if (file.exists("output/10_model_structure_uniform_weights.RData")) {
     ok("Using custom orders from File 10 (Model Structure)")
   } else {
     note("Model structure not found, using defaults")
+    cat("Model structure not found, using defaults\n")
     # Default fallback orders
     p_order <- 1; d_order <- 0; q_order <- 1
     P_order <- 1; D_order <- 1; Q_order <- 0
@@ -70,6 +71,7 @@ if (file.exists("output/10_model_structure_uniform_weights.RData")) {
   }
 } else {
   note("File 10 output not found, using defaults")
+  cat("File 10 output not found, using defaults\n")
   # Default fallback orders
   p_order <- 1; d_order <- 0; q_order <- 1
   P_order <- 1; D_order <- 1; Q_order <- 0
@@ -118,78 +120,102 @@ for (i in seq_along(wlist_uniform)) {
 
 ok("Spatial weights list constructed with ", length(wlist_uniform), " lags")
 
-# ------------------------------ Dynamic Masks (AR/MA) --------------------------------
-# Calculate maximum temporal lags needed for seasonal model
-max_ar_lag <- max(p_order, if(P_order > 0) P_order * seasonal_period else 0)
-max_ma_lag <- max(q_order, if(Q_order > 0) Q_order * seasonal_period else 0)
-
-# 🛡️ ZERO ORDERS PROTECTION: Handle case when all orders = 0
-if (max_ar_lag == 0 && max_ma_lag == 0) {
-  cat("⚠️ WARNING: All orders are 0 - creating minimal white noise model\n")
-  # Create minimal 1x2 masks for white noise model
-  ar_mask <- matrix(FALSE, 1, max_spatial_lag + 1)
-  ma_mask <- matrix(FALSE, 1, max_spatial_lag + 1)
-  # No parameters activated - pure white noise
+# ------------------------------ Load Masks from File 10 --------------------------------
+# 🔧 CRITICAL FIX: Use masks from File 10 instead of creating new ones
+if (exists("model_structures") && "uniform" %in% names(model_structures)) {
+  # Use masks from File 10 (Model Structure)
+  ar_mask <- model_structures$uniform$ar_mask
+  ma_mask <- model_structures$uniform$ma_mask
+  
+  cat("✅ USING MASKS FROM FILE 10 (Model Structure)\n")
+  cat(sprintf("- AR mask from File 10: %dx%d with %d active parameters\n", 
+             nrow(ar_mask), ncol(ar_mask), sum(ar_mask)))
+  cat(sprintf("- MA mask from File 10: %dx%d with %d active parameters\n", 
+             nrow(ma_mask), ncol(ma_mask), sum(ma_mask)))
+  
+  # Convert to logical if needed
+  ar_mask <- as.logical(ar_mask)
+  ma_mask <- as.logical(ma_mask)
+  
+  # Calculate max lags from masks - FIXED for order 0
+  max_ar_lag <- if(!is.null(ar_mask) && length(dim(ar_mask)) == 2 && nrow(ar_mask) > 0) nrow(ar_mask) else 1
+  max_ma_lag <- if(!is.null(ma_mask) && length(dim(ma_mask)) == 2 && nrow(ma_mask) > 0) nrow(ma_mask) else 1
+  
 } else {
-  # Ensure minimum dimensions
+  cat("⚠️ WARNING: File 10 masks not found, creating fallback masks\n")
+  
+  # Fallback mask creation (only if File 10 failed)
+  max_ar_lag <- max(p_order, if(P_order > 0) P_order * seasonal_period else 0)
+  max_ma_lag <- max(q_order, if(Q_order > 0) Q_order * seasonal_period else 0)
+  
+  # Ensure minimum values
   if (max_ar_lag == 0) max_ar_lag <- 1
   if (max_ma_lag == 0) max_ma_lag <- 1
   
-  # Create expanded masks for seasonal lags
-  ar_mask <- matrix(FALSE, max_ar_lag, max_spatial_lag + 1)
-  ma_mask <- matrix(FALSE, max_ma_lag, max_spatial_lag + 1)
-  
-  # Activate non-seasonal AR lags (1, 2, 3, ...)
-  if (p_order > 0) {
-    for (p in 1:p_order) {
-      ar_mask[p, 1] <- TRUE  # tlag_p-slag0
-    }
-  }
-  
-  # Activate non-seasonal MA lags (1, 2, 3, ...)
-  if (q_order > 0) {
-    for (q in 1:q_order) {
-      ma_mask[q, 1] <- TRUE  # tlag_q-slag0
-    }
-  }
-  
-  # Activate seasonal AR lags (12, 24, 36, ...)
-  if (P_order > 0) {
-    for (P in 1:P_order) {
-      seasonal_lag <- P * seasonal_period
-      if (seasonal_lag <= max_ar_lag) {
-        ar_mask[seasonal_lag, 1] <- TRUE  # seasonal AR lag
+  if (max_ar_lag == 0 && max_ma_lag == 0) {
+    ar_mask <- matrix(FALSE, 1, max_spatial_lag + 1)
+    ma_mask <- matrix(FALSE, 1, max_spatial_lag + 1)
+  } else {
+    if (max_ar_lag == 0) max_ar_lag <- 1
+    if (max_ma_lag == 0) max_ma_lag <- 1
+    
+    ar_mask <- matrix(FALSE, max_ar_lag, max_spatial_lag + 1)
+    ma_mask <- matrix(FALSE, max_ma_lag, max_spatial_lag + 1)
+    
+    if (p_order > 0) {
+      for (p in 1:p_order) {
+        ar_mask[p, 1] <- TRUE
       }
     }
-  }
-  
-  # Activate seasonal MA lags (12, 24, 36, ...)
-  if (Q_order > 0) {
-    for (Q in 1:Q_order) {
-      seasonal_lag <- Q * seasonal_period
-      if (seasonal_lag <= max_ma_lag) {
-        ma_mask[seasonal_lag, 1] <- TRUE  # seasonal MA lag
+    
+    if (q_order > 0) {
+      for (q in 1:q_order) {
+        ma_mask[q, 1] <- TRUE
+      }
+    }
+    
+    if (P_order > 0) {
+      for (P in 1:P_order) {
+        seasonal_lag <- P * seasonal_period
+        if (seasonal_lag <= max_ar_lag) {
+          ar_mask[seasonal_lag, 1] <- TRUE
+        }
+      }
+    }
+    
+    if (Q_order > 0) {
+      for (Q in 1:Q_order) {
+        seasonal_lag <- Q * seasonal_period
+        if (seasonal_lag <= max_ma_lag) {
+          ma_mask[seasonal_lag, 1] <- TRUE
+        }
       }
     }
   }
 }
 
-# Optional: Activate spatial lags (uncomment if needed)
-# ar_mask[1, 2] <- TRUE  # tlag1-slag1 (first AR lag with spatial lag 1)
-# ma_mask[1, 2] <- TRUE  # tlag1-slag1 (first MA lag with spatial lag 1)
-
-cat("🎯 Seasonal Dynamic Mask Configuration:\n")
-cat(sprintf("- AR mask: %dx%d (p=%d, P=%d, max_lag=%d)\n", 
-           nrow(ar_mask), ncol(ar_mask), p_order, P_order, max_ar_lag))
-cat(sprintf("- MA mask: %dx%d (q=%d, Q=%d, max_lag=%d)\n", 
-           nrow(ma_mask), ncol(ma_mask), q_order, Q_order, max_ma_lag))
-cat(sprintf("- Non-seasonal AR parameters: %d\n", p_order))
-cat(sprintf("- Non-seasonal MA parameters: %d\n", q_order))
-cat(sprintf("- Seasonal AR parameters: %d\n", P_order))
-cat(sprintf("- Seasonal MA parameters: %d\n", Q_order))
-cat(sprintf("- Total AR parameters: %d\n", sum(ar_mask)))
-cat(sprintf("- Total MA parameters: %d\n", sum(ma_mask)))
-cat(sprintf("- Total parameters: %d\n\n", sum(ar_mask) + sum(ma_mask)))
+cat("🎯 Final Mask Configuration:\n")
+if (!is.null(ar_mask) && !is.null(ma_mask)) {
+  cat(sprintf("- AR mask: %dx%d (p=%d, P=%d)\n", 
+             nrow(ar_mask), ncol(ar_mask), p_order, P_order))
+  cat(sprintf("- MA mask: %dx%d (q=%d, Q=%d)\n", 
+             nrow(ma_mask), ncol(ma_mask), q_order, Q_order))
+  cat("🔍 AR mask content:\n")
+  print(ar_mask)
+  cat("🔍 MA mask content:\n")
+  print(ma_mask)
+  cat(sprintf("- Non-seasonal AR parameters: %d\n", p_order))
+  cat(sprintf("- Non-seasonal MA parameters: %d\n", q_order))
+  cat(sprintf("- Seasonal AR parameters: %d\n", P_order))
+  cat(sprintf("- Seasonal MA parameters: %d\n", Q_order))
+  cat(sprintf("- Total AR parameters: %d\n", sum(ar_mask)))
+  cat(sprintf("- Total MA parameters: %d\n", sum(ma_mask)))
+  cat(sprintf("- Total parameters: %d\n\n", sum(ar_mask) + sum(ma_mask)))
+} else {
+  cat("- Masks: NULL (error in mask creation)\n")
+  cat(sprintf("- Orders: p=%d, d=%d, q=%d, P=%d, D=%d, Q=%d\n\n", 
+             p_order, d_order, q_order, P_order, D_order, Q_order))
+}
 
 ok("Dynamic masks created successfully")
 
@@ -199,37 +225,60 @@ if (length(na_rows)) {
   note(length(na_rows), " rows with NA detected — removing for estimation")
   data_input <- data_input[-na_rows, , drop = FALSE]
 }
-if (nrow(data_input) <= max(max_ar_lag, max_ma_lag) + 2)
-  halt("Not enough observations after NA handling: ", nrow(data_input))
+
+# Check minimum observations needed
+min_obs_needed <- max(max_ar_lag, max_ma_lag, 1) + 2
+if (nrow(data_input) <= min_obs_needed) {
+  halt("Not enough observations after NA handling: ", nrow(data_input), " (need at least ", min_obs_needed, ")")
+}
 
 # --------------------------- Model Estimation --------------------------------
 cat("\n🔧 Estimating STARIMA Model...\n")
 
-# 🛡️ ZERO PARAMETERS CHECK
+# 🎯 RESEARCH MODE: Handle zero parameters properly
+# Validate masks first
+if (is.null(ar_mask) || is.null(ma_mask)) {
+  halt("AR or MA mask is NULL")
+}
+
+# Ensure masks are matrices
+if (!is.matrix(ar_mask)) ar_mask <- as.matrix(ar_mask)
+if (!is.matrix(ma_mask)) ma_mask <- as.matrix(ma_mask)
+
 total_params <- sum(ar_mask) + sum(ma_mask)
 if (total_params == 0) {
-  cat("⚠️ WARNING: No parameters to estimate (all orders = 0)\n")
-  cat("📊 Creating white noise model (mean-only)...\n")
+  cat("🔬 RESEARCH: Zero parameters model (all orders = 0)\n")
+  cat("📊 Creating white noise model for research comparison...\n")
   
-  # Create a simple white noise model manually
+  # Create proper white noise model for research
+  data_mean <- mean(data_input, na.rm = TRUE)
+  data_sd <- sd(as.vector(data_input), na.rm = TRUE)
+  n_obs <- length(as.vector(data_input))
+  
   fit <- list(
     coefficients = numeric(0),
-    residuals = as.vector(data_input - mean(data_input, na.rm = TRUE)),
-    fitted.values = rep(mean(data_input, na.rm = TRUE), length(data_input)),
-    loglik = sum(dnorm(as.vector(data_input), mean(data_input, na.rm = TRUE), 
-                      sd(data_input, na.rm = TRUE), log = TRUE)),
-    aic = -2 * sum(dnorm(as.vector(data_input), mean(data_input, na.rm = TRUE), 
-                        sd(data_input, na.rm = TRUE), log = TRUE)) + 2 * 1,
-    bic = -2 * sum(dnorm(as.vector(data_input), mean(data_input, na.rm = TRUE), 
-                        sd(data_input, na.rm = TRUE), log = TRUE)) + log(nrow(data_input)) * 1,
+    residuals = as.vector(data_input - data_mean),
+    fitted.values = rep(data_mean, n_obs),
+    loglik = sum(dnorm(as.vector(data_input), data_mean, data_sd, log = TRUE)),
+    aic = -2 * sum(dnorm(as.vector(data_input), data_mean, data_sd, log = TRUE)) + 2 * 0,  # 0 parameters
+    bic = -2 * sum(dnorm(as.vector(data_input), data_mean, data_sd, log = TRUE)) + log(n_obs) * 0,  # 0 parameters
     var.coef = NULL,
-    hessian = NULL
+    hessian = NULL,
+    phi = NULL,
+    theta = NULL
   )
   class(fit) <- "white_noise_model"
   estimation_time <- 0
   
+  cat(sprintf("🔬 White noise model: mean=%.4f, sd=%.4f\n", data_mean, data_sd))
+  cat(sprintf("🔬 LogLik=%.4f, AIC=%.4f, BIC=%.4f\n", fit$loglik, fit$aic, fit$bic))
+  
 } else {
   estimation_start_time <- Sys.time()
+  
+  # Validate mask dimensions before estimation
+  cat(sprintf("🔍 Mask validation: AR=%dx%d, MA=%dx%d\n", 
+             nrow(ar_mask), ncol(ar_mask), nrow(ma_mask), ncol(ma_mask)))
   
   fit <- try(
     starma(
@@ -553,7 +602,11 @@ if (!inherits(fit, "white_noise_model") && nrow(coef_df) > 0) {
 # --------------------------- Residual Diagnostics ----------------------------
 if (inherits(fit, "white_noise_model")) {
   # White noise model residuals
-  resid_mat <- matrix(fit$residuals, nrow = nrow(data_input), ncol = ncol(data_input))
+  resid_vec <- fit$residuals
+  if (length(resid_vec) != length(as.vector(data_input))) {
+    resid_vec <- as.vector(data_input - mean(data_input, na.rm = TRUE))
+  }
+  resid_mat <- matrix(resid_vec, nrow = nrow(data_input), ncol = ncol(data_input))
 } else {
   # Regular STARIMA model residuals
   resid_mat <- residuals(fit)
@@ -597,6 +650,12 @@ uniform_results <- list(
     theta_nonseasonal = theta_nonseasonal,
     theta_seasonal = theta_seasonal,
     coefficient_info = seasonal_coef_info
+  ),
+  # Add mask information for debugging
+  masks = list(
+    ar_mask = ar_mask,
+    ma_mask = ma_mask,
+    total_params = total_params
   )
 )
 
@@ -606,8 +665,13 @@ ok("Results saved → output/11_starima_uniform.RData")
 cat("\n=== STARIMA ESTIMATION COMPLETED - uniform WEIGHTS ===\n")
 cat(sprintf("🎯 Final Model: STARIMA(%d,%d,%d) × (%d,%d,%d)%d\n", 
            p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
-cat("✅ Parameters estimated:", nrow(coef_table), "\n")
-cat("✅ Significant (<0.05):", sum(is.finite(coef_table$p_value) & coef_table$p_value < 0.05), "\n")
+if (inherits(fit, "white_noise_model")) {
+  cat("🔬 Model Type: White Noise (Zero Parameters)\n")
+  cat("✅ Parameters estimated: 0 (white noise baseline)\n")
+} else {
+  cat("✅ Parameters estimated:", nrow(coef_table), "\n")
+  cat("✅ Significant (<0.05):", sum(is.finite(coef_table$p_value) & coef_table$p_value < 0.05), "\n")
+}
 cat("✅ LogLik:", round(loglik, 4),
     " | AIC:", round(aic, 2),
     " | BIC:", round(bic, 2), "\n")

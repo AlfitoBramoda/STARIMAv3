@@ -52,10 +52,10 @@ if (file.exists("output/10_model_structure_uniform_weights.RData")) {
     
     # Extract ALL orders from File 10 (including d and D)
     p_order <- structure$ar_order %nz% 1
-    d_order <- structure$integration_order$d %nz% 0
+    d_order <- structure$d_order %nz% structure$integration_order$d %nz% 0  # FIXED: Read from correct location
     q_order <- structure$ma_order %nz% 1
     P_order <- structure$seasonal_ar_order %nz% 1
-    D_order <- structure$integration_order$D %nz% 1
+    D_order <- structure$seasonal_d_order %nz% structure$integration_order$D %nz% 1  # FIXED: Read from correct location
     Q_order <- structure$seasonal_ma_order %nz% 0
     seasonal_period <- structure$seasonal_period %nz% 12
     max_spatial_lag <- 1  # SLAG 1 only
@@ -243,25 +243,31 @@ cat("\n🔧 Estimating STARIMA Model...\n")
 # 🛡️ ZERO PARAMETERS CHECK
 total_params <- sum(ar_mask) + sum(ma_mask)
 if (total_params == 0) {
-  cat("⚠️ WARNING: No parameters to estimate (all orders = 0)\n")
-  cat("📊 Creating white noise model (mean-only)...\n")
+  cat("🔬 RESEARCH: Zero parameters model (all orders = 0)\n")
+  cat("📊 Creating white noise model for research comparison...\n")
   
-  # Create a simple white noise model manually
+  # Create proper white noise model for research
+  data_mean <- mean(data_input, na.rm = TRUE)
+  data_sd <- sd(as.vector(data_input), na.rm = TRUE)
+  n_obs <- length(as.vector(data_input))
+  
   fit <- list(
     coefficients = numeric(0),
-    residuals = as.vector(data_input - mean(data_input, na.rm = TRUE)),
-    fitted.values = rep(mean(data_input, na.rm = TRUE), length(data_input)),
-    loglik = sum(dnorm(as.vector(data_input), mean(data_input, na.rm = TRUE), 
-                      sd(data_input, na.rm = TRUE), log = TRUE)),
-    aic = -2 * sum(dnorm(as.vector(data_input), mean(data_input, na.rm = TRUE), 
-                        sd(data_input, na.rm = TRUE), log = TRUE)) + 2 * 1,
-    bic = -2 * sum(dnorm(as.vector(data_input), mean(data_input, na.rm = TRUE), 
-                        sd(data_input, na.rm = TRUE), log = TRUE)) + log(nrow(data_input)) * 1,
+    residuals = as.vector(data_input - data_mean),
+    fitted.values = rep(data_mean, n_obs),
+    loglik = sum(dnorm(as.vector(data_input), data_mean, data_sd, log = TRUE)),
+    aic = -2 * sum(dnorm(as.vector(data_input), data_mean, data_sd, log = TRUE)) + 2 * 0,  # 0 parameters
+    bic = -2 * sum(dnorm(as.vector(data_input), data_mean, data_sd, log = TRUE)) + log(n_obs) * 0,  # 0 parameters
     var.coef = NULL,
-    hessian = NULL
+    hessian = NULL,
+    phi = NULL,
+    theta = NULL
   )
   class(fit) <- "white_noise_model"
   estimation_time <- 0
+  
+  cat(sprintf("🔬 White noise model: mean=%.4f, sd=%.4f\n", data_mean, data_sd))
+  cat(sprintf("🔬 LogLik=%.4f, AIC=%.4f, BIC=%.4f\n", fit$loglik, fit$aic, fit$bic))
   
 } else {
   estimation_start_time <- Sys.time()
