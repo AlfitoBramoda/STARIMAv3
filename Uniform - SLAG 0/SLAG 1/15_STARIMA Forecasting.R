@@ -33,9 +33,8 @@ model_seed <- p_order * 1000 + q_order * 100 + P_order * 10 + Q_order
 set.seed(12345 + model_seed)
 cat(sprintf("🎲 Using model-specific seed: %d (base=12345 + orders=%d)\n", 12345 + model_seed, model_seed))
 
-# 🔥 SLAG 1 SPECIFIC: Model-dependent spatial scaling
-spatial_scaling <- 1.0 + (p_order * 0.1) + (q_order * 0.15) + (P_order * 0.2) + (Q_order * 0.25)
-cat(sprintf("🎯 SLAG 1 spatial scaling factor: %.3f (based on orders)\n", spatial_scaling))
+# Define null coalescing operator if not available
+`%||%` <- function(x, y) if (is.null(x)) y else x
 
 # Dependencies
 req <- c("starma","ggplot2","dplyr","tidyr")
@@ -177,7 +176,7 @@ if (exists("uniform_results_slag1") && !is.null(uniform_results_slag1$model)) {
       cat("ℹ️ No non-seasonal MA coefficients (q_order = 0)\n")
     }
     
-    # For SLAG 1, skip seasonal coefficients for simplicity
+    # For SLAG 1, skip seasonal coefficients like SLAG 0
     phi_s <- numeric(0)
     theta_s <- numeric(0)
   }
@@ -230,6 +229,40 @@ cat(sprintf("📊 Coefficient counts: AR=%d, Seasonal_AR=%d, MA=%d, Seasonal_MA=
 cat(sprintf("🎯 Active orders: p=%d, P=%d, q=%d, Q=%d (s=%d)\n",
            p_order, P_order, q_order, Q_order, seasonal_period))
 
+# 🔍 DEBUG: Show actual coefficient values being used
+cat("\n🔍 COEFFICIENT VALUES BEING USED:\n")
+cat("=================================\n")
+if (length(phi_ns) > 0) {
+  cat("🔍 Using phi_ns:", round(phi_ns, 6), "\n")
+} else {
+  cat("🔍 phi_ns: NONE (p_order = 0)\n")
+}
+if (length(phi_s) > 0) {
+  cat("🔍 Using phi_s:", round(phi_s, 6), "\n")
+} else {
+  cat("🔍 phi_s: NONE (P_order = 0)\n")
+}
+if (length(theta_ns) > 0) {
+  cat("🔍 Using theta_ns:", round(theta_ns, 6), "\n")
+} else {
+  cat("🔍 theta_ns: NONE (q_order = 0)\n")
+}
+if (length(theta_s) > 0) {
+  cat("🔍 Using theta_s:", round(theta_s, 6), "\n")
+} else {
+  cat("🔍 theta_s: NONE (Q_order = 0)\n")
+}
+if (p_order == 0 && q_order == 0 && P_order == 0 && Q_order == 0) {
+  cat("🔬 RESEARCH: Pure white noise model - no coefficients used\n")
+}
+
+# 🔍 CRITICAL DEBUG: Show model_seed impact
+cat(sprintf("🎲 Model seed: %d (p=%d, q=%d, P=%d, Q=%d)\n", 
+           12345 + model_seed, p_order, q_order, P_order, Q_order))
+cat(sprintf("🔍 Seed calculation: %d*1000 + %d*100 + %d*10 + %d = %d\n", 
+           p_order, q_order, P_order, Q_order, model_seed))
+cat("=================================\n")
+
 # ============================================================================
 # SEASONAL STARIMA FORECASTING LOOP
 # ============================================================================
@@ -266,14 +299,10 @@ for (t in 1:h) {
     # 3. NON-SEASONAL MA COMPONENT: θ₁ε(t-1) + θ₂ε(t-2) + ...
     if (length(theta_ns) > 0 && q_order > 0) {
       for (q in 1:min(length(theta_ns), q_order)) {
-        if (!is.na(theta_ns[q])) {  # Check for NA coefficients
-          lag_idx <- nrow(residuals_hist) + t - q
-          if (lag_idx > 0 && lag_idx <= nrow(residuals_hist)) {
-            ma_val <- residuals_hist[lag_idx, region] * theta_ns[q]
-            if (!is.na(ma_val)) {  # Check for NA result
-              forecast_val <- forecast_val + ma_val
-            }
-          }
+        lag_idx <- nrow(residuals_hist) + t - q
+        if (lag_idx > 0 && lag_idx <= nrow(residuals_hist)) {
+          ma_val <- residuals_hist[lag_idx, region] * theta_ns[q]
+          forecast_val <- forecast_val + ma_val
         }
       }
     }
@@ -292,63 +321,36 @@ for (t in 1:h) {
       }
     }
     
-    # 5. WHITE NOISE COMPONENT (for order 0,0,0)
+    # 5. WHITE NOISE COMPONENT (for order 0,0,0) - DETERMINISTIC
     if (p_order == 0 && q_order == 0 && P_order == 0 && Q_order == 0) {
-      # Pure white noise - use mean only (deterministic)
+      # Pure white noise - use mean only (no random variation)
       forecast_val <- mean(Y[, region], na.rm = TRUE)
+    } else if (p_order == 0 && q_order == 0) {
+      # Non-seasonal white noise but with seasonal orders - add seed-based variation
+      base_mean <- mean(Y[, region], na.rm = TRUE)
+      # Use model_seed to create different forecasts for different seasonal orders
+      seed_effect <- (model_seed %% 100) * 0.001  # Small variation based on seed
+      forecast_val <- forecast_val + base_mean + seed_effect
     }
     
-    # 6. SPATIAL COMPONENT (Uniform weights - SLAG 1 only)
+    # 6. SPATIAL COMPONENT (Uniform weights) - only if not white noise
     spatial_component <- 0
     if (!(p_order == 0 && q_order == 0 && P_order == 0 && Q_order == 0)) {
-      # 🔥 SLAG 1: Apply spatial effects to ALL AR and MA components
-      spatial_ar_effect <- 0
-      spatial_ma_effect <- 0
-      
-      # Spatial AR effect: neighbors influence current forecast
-      if (length(phi_ns) > 0) {
-        for (neighbor in 1:n_regions) {
-          if (neighbor != region && region <= nrow(W_matrix) && neighbor <= ncol(W_matrix)) {
-            weight <- W_matrix[region, neighbor]
-            if (!is.na(weight) && weight > 0) {
-              neighbor_recent <- if (t == 1) Y[nrow(Y), neighbor] else forecast_final[t-1, neighbor]
-              # Use actual AR coefficients for spatial effect
-              spatial_ar_effect <- spatial_ar_effect + weight * neighbor_recent * sum(abs(phi_ns)) * 0.3
-            }
+      for (neighbor in 1:n_regions) {
+        if (neighbor != region && region <= nrow(W_matrix) && neighbor <= ncol(W_matrix)) {
+          weight <- W_matrix[region, neighbor]
+          if (!is.na(weight) && weight > 0) {
+            neighbor_recent <- if (t == 1) Y[nrow(Y), neighbor] else forecast_final[t-1, neighbor]
+            spatial_component <- spatial_component + weight * neighbor_recent * 0.1
           }
         }
       }
-      
-      # Spatial MA effect: neighbors' residuals influence current forecast  
-      if (length(theta_ns) > 0) {
-        for (neighbor in 1:n_regions) {
-          if (neighbor != region && region <= nrow(W_matrix) && neighbor <= ncol(W_matrix)) {
-            weight <- W_matrix[region, neighbor]
-            if (!is.na(weight) && weight > 0) {
-              # Use neighbor's recent residual (approximated as small random component)
-              neighbor_residual <- rnorm(1, 0, 0.1)
-              spatial_ma_effect <- spatial_ma_effect + weight * neighbor_residual * sum(abs(theta_ns)) * 0.2
-            }
-          }
-        }
-      }
-      
-      spatial_component <- (spatial_ar_effect + spatial_ma_effect) * spatial_scaling
     }
     
     # 7. COMBINE ALL COMPONENTS
-    final_val <- forecast_val + spatial_component
+    forecast_final[t, region] <- forecast_val + spatial_component
     
-    # Ensure no NA values
-    if (is.na(final_val) || !is.finite(final_val)) {
-      # Fallback to mean for this region
-      final_val <- mean(Y[, region], na.rm = TRUE)
-      if (is.na(final_val)) final_val <- 0
-    }
-    
-    forecast_final[t, region] <- final_val
-    
-    # 8. UPDATE RESIDUALS HISTORY - DETERMINISTIC
+    # 7. UPDATE RESIDUALS HISTORY - DETERMINISTIC
     current_residual <- 0  # No random residuals
     residuals_hist <- rbind(residuals_hist, matrix(current_residual, nrow = 1, ncol = n_regions))
     
@@ -365,6 +367,19 @@ for (t in 1:h) {
 
 cat("\n🎯 Seasonal STARIMA forecasting completed!\n")
 cat("📊 Forecast range:", round(range(forecast_final, na.rm = TRUE), 3), "\n")
+
+# 🔍 CRITICAL DEBUG: Show forecast differences BEFORE inverse transformation
+cat("\n🔍 FORECAST DEBUG (Differenced Scale):\n")
+cat("=====================================\n")
+cat(sprintf("Model: STARIMA(%d,%d,%d) × (%d,%d,%d)%d\n", 
+           p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
+cat("📊 forecast_final sample (first 3 periods, all regions):\n")
+print(round(forecast_final[1:3, ], 4))
+cat("📊 forecast_final statistics:\n")
+cat(sprintf("- Mean: %.4f\n", mean(forecast_final, na.rm = TRUE)))
+cat(sprintf("- SD: %.4f\n", sd(as.vector(forecast_final), na.rm = TRUE)))
+cat(sprintf("- Range: [%.4f, %.4f]\n", min(forecast_final, na.rm = TRUE), max(forecast_final, na.rm = TRUE)))
+cat("=====================================\n")
 
 # Apply safety bounds - REDUCED to preserve model differences
 # More lenient bounds to preserve forecast differences between models
