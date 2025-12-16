@@ -28,9 +28,9 @@ d_order <- 0             # Non-seasonal differencing (usually 0 or 1)
 q_order <- 0             # Non-seasonal MA order (try: 1, 2, 3)
 
 # 🧪 CUSTOM SEASONAL PARAMETERS (EDIT THESE!):
-P_order <- 0             # Seasonal AR order (try: 0, 1, 2)
+P_order <- 1             # Seasonal AR order (try: 0, 1, 2)
 D_order <- 1             # Seasonal differencing (keep at 1 for monthly data)
-Q_order <- 1             # Seasonal MA order (try: 0, 1, 2)
+Q_order <- 0             # Seasonal MA order (try: 0, 1, 2)
 seasonal_period <- 12    # Seasonal period (keep at 12 for monthly)
 
 n_observations <- 96     # Jumlah observasi training

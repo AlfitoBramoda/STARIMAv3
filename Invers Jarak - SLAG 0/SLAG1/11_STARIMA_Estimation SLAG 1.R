@@ -113,20 +113,34 @@ print(summary(fit))
 
 sm <- summary(fit)
 coef_df <- as.data.frame(sm$coefficients, stringsAsFactors = FALSE)
-std_names <- c("Estimate","Std. Error","t value","Pr(>|t|)")
-for (nm in std_names) if (!nm %in% names(coef_df)) coef_df[[nm]] <- NA_real_
-names(coef_df)[match(std_names, names(coef_df), nomatch = 0)] <- c("Estimate","Std.Error","t.value","p.value")
 
-coef_table <- data.frame(
-  Parameter   = rownames(coef_df),
-  Estimate    = round(coef_df$Estimate, 6),
-  Std_Error   = round(coef_df$Std.Error, 6),
-  t_value     = round(coef_df$t.value, 4),
-  p_value     = round(coef_df$p.value, 6),
-  Significant = ifelse(is.finite(coef_df$p.value) & coef_df$p.value < 0.05, "*",
-                       ifelse(is.finite(coef_df$p.value) & coef_df$p.value < 0.10, "*","")),
-  row.names = NULL, check.names = FALSE
-)
+# Handle empty coefficient case
+if (nrow(coef_df) == 0) {
+  coef_table <- data.frame(
+    Parameter   = character(0),
+    Estimate    = numeric(0),
+    Std_Error   = numeric(0),
+    t_value     = numeric(0),
+    p_value     = numeric(0),
+    Significant = character(0),
+    stringsAsFactors = FALSE
+  )
+} else {
+  std_names <- c("Estimate","Std. Error","t value","Pr(>|t|)")
+  for (nm in std_names) if (!nm %in% names(coef_df)) coef_df[[nm]] <- NA_real_
+  names(coef_df)[match(std_names, names(coef_df), nomatch = 0)] <- c("Estimate","Std.Error","t.value","p.value")
+  
+  coef_table <- data.frame(
+    Parameter   = rownames(coef_df),
+    Estimate    = round(coef_df$Estimate, 6),
+    Std_Error   = round(coef_df$Std.Error, 6),
+    t_value     = round(coef_df$t.value, 4),
+    p_value     = round(coef_df$p.value, 6),
+    Significant = ifelse(is.finite(coef_df$p.value) & coef_df$p.value < 0.05, "*",
+                         ifelse(is.finite(coef_df$p.value) & coef_df$p.value < 0.10, "*","")),
+    row.names = NULL, check.names = FALSE
+  )
+}
 
 # --------------------------- Fit Statistics ---------------------------------
 loglik <- fit$loglik %nz% NA_real_
