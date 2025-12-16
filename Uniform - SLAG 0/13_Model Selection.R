@@ -21,7 +21,11 @@ library(gridExtra)
 p_order <- uniform_results$orders$p
 d_order <- uniform_results$orders$d
 q_order <- uniform_results$orders$q
-model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+P_order <- uniform_results_slag1$orders$P
+D_order <- uniform_results_slag1$orders$D
+Q_order <- uniform_results_slag1$orders$Q
+model_name <- sprintf("STARIMA(%d,%d,%d) × (%d,%d,%d)%d", 
+                     p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
 
 cat("=== STARIMA MODEL SELECTION (uniform ONLY) ===\n\n")
 cat(sprintf("📋 Evaluating: %s - uniform Weights\n\n", model_name))

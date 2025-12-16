@@ -25,12 +25,12 @@ max_spatial_lag <- 2     # Maximum spatial lag (from spatial weights)
 # 🧪 CUSTOM NON-SEASONAL PARAMETERS (EDIT THESE!):
 p_order <- 0             # Non-seasonal AR order (try: 1, 2, 3, 4)
 d_order <- 0             # Non-seasonal differencing (usually 0 or 1)
-q_order <- 1             # Non-seasonal MA order (try: 1, 2, 3)
+q_order <- 0             # Non-seasonal MA order (try: 1, 2, 3)
 
 # 🧪 CUSTOM SEASONAL PARAMETERS (EDIT THESE!):
-P_order <- 1             # Seasonal AR order (try: 0, 1, 2)
+P_order <- 0             # Seasonal AR order (try: 0, 1, 2)
 D_order <- 1             # Seasonal differencing (keep at 1 for monthly data)
-Q_order <- 0             # Seasonal MA order (try: 0, 1, 2)
+Q_order <- 1             # Seasonal MA order (try: 0, 1, 2)
 seasonal_period <- 12    # Seasonal period (keep at 12 for monthly)
 
 n_observations <- 96     # Jumlah observasi training
@@ -45,55 +45,89 @@ n_observations <- 96     # Jumlah observasi training
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
-create_ar_mask <- function(p_order, max_spatial_lag) {
+create_ar_mask <- function(total_ar_lags, max_spatial_lag) {
   # 🎯 RESEARCH MODE: Handle ALL orders including 0 for real comparison
-  if (is.null(p_order) || is.na(p_order)) p_order <- 0
+  if (is.null(total_ar_lags) || is.na(total_ar_lags)) total_ar_lags <- 0
   if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
   
   # For zero AR order - create minimal mask
-  if (p_order == 0) {
+  if (total_ar_lags == 0) {
     ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = 1)
-    cat(sprintf("🔬 RESEARCH: AR order = 0, mask = %dx%d, params = %d\n", 
+    cat(sprintf("🔬 RESEARCH: AR total_lags = 0, mask = %dx%d, params = %d\n", 
                nrow(ar_mask), ncol(ar_mask), sum(ar_mask)))
     return(ar_mask)
   }
   
   # For non-zero AR order - create proper mask
-  ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = p_order)
+  ar_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = total_ar_lags)
   
-  # Activate temporal lags only (no spatial for simplicity)
-  for (p in 1:p_order) {
-    ar_mask[1, p] <- 1  # Temporal lag p, spatial lag 0
+  # 🔧 CRITICAL FIX: Activate specific lags based on orders
+  # Non-seasonal AR lags (1, 2, 3, ...)
+  if (p_order > 0) {
+    for (p in 1:p_order) {
+      if (p <= total_ar_lags) {
+        ar_mask[1, p] <- 1  # Non-seasonal AR lag p
+        cat(sprintf("✅ Activated non-seasonal AR lag %d\n", p))
+      }
+    }
   }
   
-  cat(sprintf("🔬 RESEARCH: AR order = %d, mask = %dx%d, params = %d\n", 
-             p_order, nrow(ar_mask), ncol(ar_mask), sum(ar_mask)))
+  # Seasonal AR lags (12, 24, 36, ...)
+  if (P_order > 0) {
+    for (P in 1:P_order) {
+      seasonal_lag <- P * seasonal_period
+      if (seasonal_lag <= total_ar_lags) {
+        ar_mask[1, seasonal_lag] <- 1  # Seasonal AR lag
+        cat(sprintf("✅ Activated seasonal AR lag %d (P=%d)\n", seasonal_lag, P))
+      }
+    }
+  }
+  
+  cat(sprintf("🔬 RESEARCH: AR total_lags = %d, mask = %dx%d, params = %d\n", 
+             total_ar_lags, nrow(ar_mask), ncol(ar_mask), sum(ar_mask)))
   return(ar_mask)
 }
 
-create_ma_mask <- function(q_order, max_spatial_lag) {
+create_ma_mask <- function(total_ma_lags, max_spatial_lag) {
   # 🎯 RESEARCH MODE: Handle ALL orders including 0 for real comparison
-  if (is.null(q_order) || is.na(q_order)) q_order <- 0
+  if (is.null(total_ma_lags) || is.na(total_ma_lags)) total_ma_lags <- 0
   if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
   
   # For zero MA order - create minimal mask
-  if (q_order == 0) {
+  if (total_ma_lags == 0) {
     ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = 1)
-    cat(sprintf("🔬 RESEARCH: MA order = 0, mask = %dx%d, params = %d\n", 
+    cat(sprintf("🔬 RESEARCH: MA total_lags = 0, mask = %dx%d, params = %d\n", 
                nrow(ma_mask), ncol(ma_mask), sum(ma_mask)))
     return(ma_mask)
   }
   
   # For non-zero MA order - create proper mask
-  ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = q_order)
+  ma_mask <- matrix(0, nrow = max_spatial_lag + 1, ncol = total_ma_lags)
   
-  # Activate temporal lags only (no spatial for simplicity)
-  for (q in 1:q_order) {
-    ma_mask[1, q] <- 1  # Temporal lag q, spatial lag 0
+  # 🔧 CRITICAL FIX: Activate specific lags based on orders
+  # Non-seasonal MA lags (1, 2, 3, ...)
+  if (q_order > 0) {
+    for (q in 1:q_order) {
+      if (q <= total_ma_lags) {
+        ma_mask[1, q] <- 1  # Non-seasonal MA lag q
+        cat(sprintf("✅ Activated non-seasonal MA lag %d\n", q))
+      }
+    }
   }
   
-  cat(sprintf("🔬 RESEARCH: MA order = %d, mask = %dx%d, params = %d\n", 
-             q_order, nrow(ma_mask), ncol(ma_mask), sum(ma_mask)))
+  # Seasonal MA lags (12, 24, 36, ...)
+  if (Q_order > 0) {
+    for (Q in 1:Q_order) {
+      seasonal_lag <- Q * seasonal_period
+      if (seasonal_lag <= total_ma_lags) {
+        ma_mask[1, seasonal_lag] <- 1  # Seasonal MA lag
+        cat(sprintf("✅ Activated seasonal MA lag %d (Q=%d)\n", seasonal_lag, Q))
+      }
+    }
+  }
+  
+  cat(sprintf("🔬 RESEARCH: MA total_lags = %d, mask = %dx%d, params = %d\n", 
+             total_ma_lags, nrow(ma_mask), ncol(ma_mask), sum(ma_mask)))
   return(ma_mask)
 }
 
@@ -146,13 +180,23 @@ cat("- Source: CUSTOM orders (auto-identification disabled)\n")
 # 🎯 RESEARCH MODE: Respect exact orders for real comparison
 max_spatial_lag <- 0  # Disable spatial for cleaner comparison
 
-# Calculate exact temporal lags needed
+# Calculate exact temporal lags needed - FIXED for proper seasonal handling
 total_ar_lags <- p_order  # Use exact non-seasonal order
 total_ma_lags <- q_order  # Use exact non-seasonal order
 
-# Add seasonal lags if specified
+# Add seasonal lags if specified - CRITICAL FIX
 if (P_order > 0) total_ar_lags <- max(total_ar_lags, P_order * seasonal_period)
 if (Q_order > 0) total_ma_lags <- max(total_ma_lags, Q_order * seasonal_period)
+
+# 🔧 CRITICAL FIX: Ensure minimum lags for seasonal models
+if (Q_order > 0 && total_ma_lags < seasonal_period) {
+  total_ma_lags <- seasonal_period  # Need at least seasonal_period lags for seasonal MA
+  cat(sprintf("🔧 FIXED: MA lags increased to %d for seasonal MA(%d)\n", total_ma_lags, Q_order))
+}
+if (P_order > 0 && total_ar_lags < seasonal_period) {
+  total_ar_lags <- seasonal_period  # Need at least seasonal_period lags for seasonal AR
+  cat(sprintf("🔧 FIXED: AR lags increased to %d for seasonal AR(%d)\n", total_ar_lags, P_order))
+}
 
 cat("🔬 RESEARCH MODE: Exact order handling\n")
 cat(sprintf("- Input orders: p=%d, d=%d, q=%d, P=%d, D=%d, Q=%d\n", 
