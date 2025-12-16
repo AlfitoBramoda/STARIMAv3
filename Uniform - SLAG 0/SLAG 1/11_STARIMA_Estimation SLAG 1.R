@@ -174,13 +174,13 @@ if (max_ar_lag == 0 && max_ma_lag == 0) {
   }
 }
 
-# 🔥 SLAG 1 ONLY: Disable SLAG 0 and force ONLY SLAG 1 (only if not white noise)
+# 🎯 SLAG 1 APPROACH: Include both SLAG 0 (base) and SLAG 1 (neighbor) components
 if (!(max_ar_lag == 0 && max_ma_lag == 0)) {
-  # Disable all SLAG 0 parameters
-  ar_mask[, 1] <- FALSE  # Disable all temporal lags for spatial lag 0
-  ma_mask[, 1] <- FALSE  # Disable all temporal lags for spatial lag 0
+  # Keep SLAG 0 parameters (temporal effects within regions)
+  # ar_mask[, 1] remains as set above for temporal lags
+  # ma_mask[, 1] remains as set above for temporal lags
   
-  # Force ONLY SLAG 1 parameters
+  # Add SLAG 1 parameters (neighbor effects)
   if (ncol(ar_mask) >= 2) {
     if (p_order > 0) ar_mask[1, 2] <- TRUE   # tlag1-slag1 (AR lag 1 with spatial lag 1)
     if (P_order > 0 && seasonal_period <= nrow(ar_mask)) ar_mask[seasonal_period, 2] <- TRUE  # seasonal AR with spatial lag 1
@@ -191,10 +191,10 @@ if (!(max_ar_lag == 0 && max_ma_lag == 0)) {
   }
 }
 
-cat("🔥 SLAG 1 ONLY ACTIVATION:\n")
-cat("- SLAG 0: DISABLED (all parameters)\n")
-cat("- SLAG 1: ENABLED (neighbor effects only)\n")
-cat("- Pure SLAG 1 analysis activated\n")
+cat("🎯 SLAG 1 APPROACH ACTIVATION:\n")
+cat("- SLAG 0: ENABLED (temporal effects within regions)\n")
+cat("- SLAG 1: ENABLED (neighbor effects between regions)\n")
+cat("- Combined SLAG 0+1 analysis activated\n")
 
 cat("🎯 Seasonal Dynamic Mask Configuration:\n")
 cat(sprintf("- AR mask: %dx%d (p=%d, P=%d, max_lag=%d)\n", 
@@ -209,7 +209,7 @@ cat(sprintf("- Total AR parameters: %d\n", sum(ar_mask)))
 cat(sprintf("- Total MA parameters: %d\n", sum(ma_mask)))
 cat(sprintf("- Total parameters: %d\n", sum(ar_mask) + sum(ma_mask)))
 cat(sprintf("- SLAG 1 parameters: %d (AR) + %d (MA)\n", sum(ar_mask[, 2]), sum(ma_mask[, 2])))
-cat(sprintf("- SLAG 0 parameters: %d (AR) + %d (MA) - DISABLED\n\n", sum(ar_mask[, 1]), sum(ma_mask[, 1])))
+cat(sprintf("- SLAG 0 parameters: %d (AR) + %d (MA) - ENABLED\n\n", sum(ar_mask[, 1]), sum(ma_mask[, 1])))
 
 ok("Dynamic masks created successfully")
 
@@ -221,12 +221,12 @@ print(ar_mask)
 cat("\nMA Mask Structure:\n")
 print(ma_mask)
 cat("\nSpatial Lag Analysis:\n")
-cat(sprintf("- AR SLAG 0 active: %s\n", ifelse(any(ar_mask[, 1]), "❌ YES (should be NO)", "✅ NO (correct)")))
-cat(sprintf("- AR SLAG 1 active: %s\n", ifelse(any(ar_mask[, 2]), "✅ YES (correct)", "❌ NO (should be YES)")))
-cat(sprintf("- MA SLAG 0 active: %s\n", ifelse(any(ma_mask[, 1]), "❌ YES (should be NO)", "✅ NO (correct)")))
-cat(sprintf("- MA SLAG 1 active: %s\n", ifelse(any(ma_mask[, 2]), "✅ YES (correct)", "❌ NO (should be YES)")))
-cat(sprintf("- Total SLAG 0 params: %d (should be 0)\n", sum(ar_mask[, 1]) + sum(ma_mask[, 1])))
-cat(sprintf("- Total SLAG 1 params: %d (should be 4)\n", sum(ar_mask[, 2]) + sum(ma_mask[, 2])))
+cat(sprintf("- AR SLAG 0 active: %s\n", ifelse(any(ar_mask[, 1]), "✅ YES (temporal effects)", "❌ NO (missing temporal)")))
+cat(sprintf("- AR SLAG 1 active: %s\n", ifelse(any(ar_mask[, 2]), "✅ YES (neighbor effects)", "❌ NO (missing neighbor)")))
+cat(sprintf("- MA SLAG 0 active: %s\n", ifelse(any(ma_mask[, 1]), "✅ YES (temporal effects)", "❌ NO (missing temporal)")))
+cat(sprintf("- MA SLAG 1 active: %s\n", ifelse(any(ma_mask[, 2]), "✅ YES (neighbor effects)", "❌ NO (missing neighbor)")))
+cat(sprintf("- Total SLAG 0 params: %d (temporal effects)\n", sum(ar_mask[, 1]) + sum(ma_mask[, 1])))
+cat(sprintf("- Total SLAG 1 params: %d (neighbor effects)\n", sum(ar_mask[, 2]) + sum(ma_mask[, 2])))
 
 # ----------------------------- Data Hygiene ----------------------------------
 na_rows <- which(!stats::complete.cases(data_input))
@@ -570,11 +570,14 @@ phi_seasonal <- coef_df$Estimate[seasonal_coef_info$Type == "Seasonal_AR"]
 theta_nonseasonal <- coef_df$Estimate[seasonal_coef_info$Type == "NonSeasonal_MA"]
 theta_seasonal <- coef_df$Estimate[seasonal_coef_info$Type == "Seasonal_MA"]
 
-# 🎯 SLAG 1 ONLY: All coefficients are SLAG 1 (neighbor effects)
-phi_slag0 <- numeric(0)  # Should be empty for SLAG 1 only
-phi_slag1 <- c(phi_nonseasonal, phi_seasonal)  # All AR coefficients are SLAG 1
-theta_slag0 <- numeric(0)  # Should be empty for SLAG 1 only  
-theta_slag1 <- c(theta_nonseasonal, theta_seasonal)  # All MA coefficients are SLAG 1
+# 🎯 SLAG 1 APPROACH: Separate SLAG 0 and SLAG 1 coefficients
+# Extract SLAG 0 coefficients (temporal effects within regions)
+phi_slag0 <- coef_df$Estimate[seasonal_coef_info$Type %in% c("NonSeasonal_AR", "Seasonal_AR") & seasonal_coef_info$Spatial_Lag == 0]
+theta_slag0 <- coef_df$Estimate[seasonal_coef_info$Type %in% c("NonSeasonal_MA", "Seasonal_MA") & seasonal_coef_info$Spatial_Lag == 0]
+
+# Extract SLAG 1 coefficients (neighbor effects between regions)
+phi_slag1 <- coef_df$Estimate[seasonal_coef_info$Type %in% c("NonSeasonal_AR", "Seasonal_AR") & seasonal_coef_info$Spatial_Lag == 1]
+theta_slag1 <- coef_df$Estimate[seasonal_coef_info$Type %in% c("NonSeasonal_MA", "Seasonal_MA") & seasonal_coef_info$Spatial_Lag == 1]
 
 cat("\n🎯 Seasonal Coefficient Summary (All SLAG 1):\n")
 cat(sprintf("- Non-seasonal AR (φ): %d parameters (neighbor effects)\n", length(phi_nonseasonal)))
@@ -582,28 +585,30 @@ cat(sprintf("- Seasonal AR (Φ): %d parameters (neighbor effects)\n", length(phi
 cat(sprintf("- Non-seasonal MA (θ): %d parameters (neighbor effects)\n", length(theta_nonseasonal)))
 cat(sprintf("- Seasonal MA (Θ): %d parameters (neighbor effects)\n", length(theta_seasonal)))
 
-cat("\n🔥 SLAG 1 ONLY Coefficient Summary:\n")
-cat(sprintf("- Non-seasonal AR (φ): %d parameters (SLAG 1)\n", length(phi_nonseasonal)))
-cat(sprintf("- Seasonal AR (Φ): %d parameters (SLAG 1)\n", length(phi_seasonal)))
-cat(sprintf("- Non-seasonal MA (θ): %d parameters (SLAG 1)\n", length(theta_nonseasonal)))
-cat(sprintf("- Seasonal MA (Θ): %d parameters (SLAG 1)\n", length(theta_seasonal)))
+cat("\n🎯 SLAG 1 APPROACH Coefficient Summary:\n")
+cat(sprintf("- Non-seasonal AR (φ): %d parameters (SLAG 0+1)\n", length(phi_nonseasonal)))
+cat(sprintf("- Seasonal AR (Φ): %d parameters (SLAG 0+1)\n", length(phi_seasonal)))
+cat(sprintf("- Non-seasonal MA (θ): %d parameters (SLAG 0+1)\n", length(theta_nonseasonal)))
+cat(sprintf("- Seasonal MA (Θ): %d parameters (SLAG 0+1)\n", length(theta_seasonal)))
 
-cat("\n🎯 SLAG 1 ONLY Classification:\n")
-cat(sprintf("- SLAG 0 AR parameters: %d (forced to 0)\n", length(phi_slag0)))
-cat(sprintf("- SLAG 1 AR parameters: %d (all AR coefficients)\n", length(phi_slag1)))
-cat(sprintf("- SLAG 0 MA parameters: %d (forced to 0)\n", length(theta_slag0)))
-cat(sprintf("- SLAG 1 MA parameters: %d (all MA coefficients)\n", length(theta_slag1)))
+cat("\n🎯 SLAG 1 APPROACH Classification:\n")
+cat(sprintf("- SLAG 0 AR parameters: %d (temporal effects)\n", length(phi_slag0)))
+cat(sprintf("- SLAG 1 AR parameters: %d (neighbor effects)\n", length(phi_slag1)))
+cat(sprintf("- SLAG 0 MA parameters: %d (temporal effects)\n", length(theta_slag0)))
+cat(sprintf("- SLAG 1 MA parameters: %d (neighbor effects)\n", length(theta_slag1)))
 
-# Show all coefficients as SLAG 1 (neighbor effects)
-if (length(phi_nonseasonal) > 0) cat("✅ Non-seasonal AR (neighbor effects):", round(phi_nonseasonal, 4), "\n")
-if (length(phi_seasonal) > 0) cat("✅ Seasonal AR (neighbor effects):", round(phi_seasonal, 4), "\n")
-if (length(theta_nonseasonal) > 0) cat("✅ Non-seasonal MA (neighbor effects):", round(theta_nonseasonal, 4), "\n")
-if (length(theta_seasonal) > 0) cat("✅ Seasonal MA (neighbor effects):", round(theta_seasonal, 4), "\n")
+# Show coefficients by spatial lag
+if (length(phi_slag0) > 0) cat("✅ SLAG 0 AR (temporal effects):", round(phi_slag0, 4), "\n")
+if (length(phi_slag1) > 0) cat("✅ SLAG 1 AR (neighbor effects):", round(phi_slag1, 4), "\n")
+if (length(theta_slag0) > 0) cat("✅ SLAG 0 MA (temporal effects):", round(theta_slag0, 4), "\n")
+if (length(theta_slag1) > 0) cat("✅ SLAG 1 MA (neighbor effects):", round(theta_slag1, 4), "\n")
 
   # Final verification
   total_params <- length(phi_nonseasonal) + length(phi_seasonal) + length(theta_nonseasonal) + length(theta_seasonal)
-  cat(sprintf("\n🎯 FINAL CHECK: Total SLAG 1 parameters = %d\n", total_params))
-  cat("✅ SUCCESS: All parameters are neighbor effects (SLAG 1 only)!\n")
+  total_slag0 <- length(phi_slag0) + length(theta_slag0)
+  total_slag1 <- length(phi_slag1) + length(theta_slag1)
+  cat(sprintf("\n🎯 FINAL CHECK: Total parameters = %d (SLAG 0: %d, SLAG 1: %d)\n", total_params, total_slag0, total_slag1))
+  cat("✅ SUCCESS: SLAG 1 approach includes both temporal and neighbor effects!\n")
   
 } else {
   # White noise model - create empty coefficient info
@@ -695,7 +700,7 @@ cat("✅ LogLik:", round(loglik, 4),
     " | BIC:", round(bic, 2), "\n")
 cat(sprintf("📊 Orders used: (p,d,q,P,D,Q,s) = (%d,%d,%d,%d,%d,%d,%d)\n", 
            p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
-cat(sprintf("🔥 SLAG 1 ONLY Status: %d AR + %d MA parameters (pure neighbor effects)\n",
-           length(phi_slag1), length(theta_slag1)))
-cat("✅ All parameters represent neighbor effects only!\n")
+cat(sprintf("🎯 SLAG 1 APPROACH Status: SLAG 0 (%d AR + %d MA) + SLAG 1 (%d AR + %d MA)\n",
+           length(phi_slag0), length(theta_slag0), length(phi_slag1), length(theta_slag1)))
+cat("✅ Model includes both temporal and neighbor effects!\n")
 cat("📊 Next step: 12_Residual_Diagnostic.R\n")

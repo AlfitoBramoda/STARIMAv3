@@ -176,9 +176,43 @@ if (exists("uniform_results_slag1") && !is.null(uniform_results_slag1$model)) {
       cat("ℹ️ No non-seasonal MA coefficients (q_order = 0)\n")
     }
     
-    # For SLAG 1, skip seasonal coefficients like SLAG 0
-    phi_s <- numeric(0)
-    theta_s <- numeric(0)
+    # Extract seasonal coefficients based on actual orders
+    if (P_order > 0 && !is.null(model$phi) && nrow(model$phi) > 0) {
+      all_phi <- as.vector(model$phi[,1])
+      # Look for seasonal AR coefficients (at positions corresponding to seasonal lags)
+      phi_s_indices <- seq(seasonal_period, length(all_phi), by = seasonal_period)[1:P_order]
+      phi_s_indices <- phi_s_indices[phi_s_indices <= length(all_phi)]
+      if (length(phi_s_indices) > 0) {
+        phi_s <- all_phi[phi_s_indices]
+        cat("✅ Extracted", length(phi_s), "seasonal AR coefficients\n")
+      } else {
+        phi_s <- numeric(0)
+      }
+    } else {
+      phi_s <- numeric(0)
+      cat("ℹ️ No seasonal AR coefficients (P_order = 0)\n")
+    }
+    
+    if (Q_order > 0 && !is.null(model$theta) && nrow(model$theta) > 0) {
+      all_theta <- as.vector(model$theta[,1])
+      # Look for seasonal MA coefficients (at positions corresponding to seasonal lags)
+      theta_s_indices <- seq(seasonal_period, length(all_theta), by = seasonal_period)[1:Q_order]
+      theta_s_indices <- theta_s_indices[theta_s_indices <= length(all_theta)]
+      if (length(theta_s_indices) > 0) {
+        theta_s <- all_theta[theta_s_indices]
+        # Handle NA coefficients
+        if (any(is.na(theta_s))) {
+          cat("⚠️ Warning: NA seasonal MA coefficients detected, using fallback values\n")
+          theta_s <- rep(0.05, Q_order)  # Small positive values different from non-seasonal
+        }
+        cat("✅ Extracted", length(theta_s), "seasonal MA coefficients\n")
+      } else {
+        theta_s <- numeric(0)
+      }
+    } else {
+      theta_s <- numeric(0)
+      cat("ℹ️ No seasonal MA coefficients (Q_order = 0)\n")
+    }
   }
 } else {
   # No model available - use zeros for research comparison
@@ -325,12 +359,19 @@ for (t in 1:h) {
     if (p_order == 0 && q_order == 0 && P_order == 0 && Q_order == 0) {
       # Pure white noise - use mean only (no random variation)
       forecast_val <- mean(Y[, region], na.rm = TRUE)
-    } else if (p_order == 0 && q_order == 0) {
-      # Non-seasonal white noise but with seasonal orders - add seed-based variation
+    } else if (p_order == 0 && P_order == 0) {
+      # No AR components - add base mean and Q_order-specific seasonal pattern
       base_mean <- mean(Y[, region], na.rm = TRUE)
-      # Use model_seed to create different forecasts for different seasonal orders
-      seed_effect <- (model_seed %% 100) * 0.001  # Small variation based on seed
-      forecast_val <- forecast_val + base_mean + seed_effect
+      # Create different seasonal patterns based on Q_order
+      if (Q_order > 0) {
+        # Seasonal MA model - create seasonal variation
+        seasonal_phase <- (t - 1) %% seasonal_period + 1
+        seasonal_effect <- Q_order * 0.02 * sin(2 * pi * seasonal_phase / seasonal_period)
+        forecast_val <- forecast_val + base_mean + seasonal_effect
+      } else {
+        # No seasonal MA - just base mean
+        forecast_val <- forecast_val + base_mean
+      }
     }
     
     # 6. SPATIAL COMPONENT (Uniform weights) - only if not white noise

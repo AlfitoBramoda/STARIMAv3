@@ -118,9 +118,9 @@ cat("\n💾 Saving results...\n")
 spatial_weights <- list(correlation = correlation_weights)
 
 save(spatial_weights, correlation_matrix, rainfall_matrix, integration_order,
-     file = "output/07_spatial_weights_correlation_only.RData")
+     file = "output/07_spatial_weights_correlation.RData")
 
 cat("\n✅ Correlation-Based Weights successfully created and saved!\n")
-cat("📁 File: output/07_spatial_weights_correlation_only.RData\n")
+cat("📁 File: output/07_spatial_weights_correlation.RData\n")
 cat("🔄 Next step: Model structure identification (STACF/STPACF)\n")
 cat(paste(rep("=", 60), collapse = ""), "\n")

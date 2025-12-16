@@ -20,7 +20,12 @@ library(gridExtra)
 p_order <- correlation_results$orders$p
 d_order <- correlation_results$orders$d
 q_order <- correlation_results$orders$q
-model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+P_order <- correlation_results$orders$P
+D_order <- correlation_results$orders$D
+Q_order <- correlation_results$orders$Q
+seasonal_period <- correlation_results$orders$s
+model_name <- sprintf("STARIMA(%d,%d,%d) × (%d,%d,%d)%d", 
+                     p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
 
 cat("=== STARIMA MODEL SELECTION (correlation ONLY) ===\n\n")
 cat(sprintf("📋 Evaluating: %s - correlation Weights\n\n", model_name))
@@ -66,7 +71,7 @@ param_table <- data.frame(
 
 print(param_table)
 
-significant_params <- sum(correlation_coef$Significant == "*")
+significant_params <- sum(correlation_coef$Significant == "***")
 total_params <- nrow(correlation_coef)
 
 cat("\n📈 Significant parameters:", significant_params, "/", total_params, "\n")
@@ -154,16 +159,23 @@ fit_plot <- ggplot(model_summary, aes(x = Model, y = AIC, fill = Spatial_Weight_
   theme(plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 
-param_plot <- ggplot(param_table, aes(x = Parameter, y = Estimate, fill = Significant)) +
-  geom_col(alpha = 0.7) +
-  labs(title = "Parameter Estimates (correlation Model)",
-       subtitle = "Significant parameters highlighted",
-       x = "Parameter", y = "Estimate Value") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(hjust = 0.5))
-
-grid.arrange(fit_plot, param_plot, ncol = 2)
+# Create parameter plot only if parameters exist
+if (nrow(param_table) > 0) {
+  param_plot <- ggplot(param_table, aes(x = Parameter, y = Estimate, fill = Significant)) +
+    geom_col(alpha = 0.7) +
+    labs(title = "Parameter Estimates (correlation Model)",
+         subtitle = "Significant parameters highlighted",
+         x = "Parameter", y = "Estimate Value") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          plot.title = element_text(hjust = 0.5))
+  
+  grid.arrange(fit_plot, param_plot, ncol = 2)
+} else {
+  # White noise model - only show fit plot
+  print(fit_plot)
+  cat("ℹ️ Parameter plot skipped - white noise model has no parameters\n")
+}
 
 # ============================================================================
 # SAVE RESULTS
@@ -184,7 +196,9 @@ model_selection_results <- list(
 
 save(model_selection_results, file = "output/13_model_selection_correlation.RData")
 
-cat("\n=== MODEL SELECTION COMPLETED (correlation ONLY) ===\n")
-cat(sprintf("✅ %s - correlation model finalized successfully\n", model_name))
+cat("\n=== SEASONAL MODEL SELECTION COMPLETED (correlation ONLY) ===\n")
+cat(sprintf("✅ %s - correlation seasonal model finalized successfully\n", model_name))
+cat(sprintf("📊 Final Orders: (p,d,q,P,D,Q,s) = (%d,%d,%d,%d,%d,%d,%d)\n", 
+           p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 cat("✅ Results saved to: output/13_model_selection_correlation.RData\n")
-cat("🎯 Ready for Phase 5: STARIMA Forecasting\n")
+cat("🎯 Ready for Phase 5: Seasonal STARIMA Forecasting\n")

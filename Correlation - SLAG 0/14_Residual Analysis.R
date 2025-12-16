@@ -18,13 +18,23 @@ library(dplyr)
 load("output/12_diagnostic_correlation.RData")
 load("output/11_starima_correlation.RData")
 
-# Extract model info
+# Extract dynamic model info with seasonal parameters
 p_order <- correlation_results$orders$p
 d_order <- correlation_results$orders$d
 q_order <- correlation_results$orders$q
-model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+# Extract seasonal parameters if available
+P_order <- if (!is.null(correlation_results$orders$P)) correlation_results$orders$P else 0
+Q_order <- if (!is.null(correlation_results$orders$Q)) correlation_results$orders$Q else 0
+D_order <- if (!is.null(correlation_results$orders$D)) correlation_results$orders$D else 1
+seasonal_period <- if (!is.null(correlation_results$orders$s)) correlation_results$orders$s else 12
+
+model_name <- sprintf("STARIMA(%d,%d,%d) × (%d,%d,%d)%d", 
+                     p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
 
 cat(sprintf("📊 Detailed Residual Analysis for %s - correlation Weights\n\n", model_name))
+cat("🎯 Current Model Orders:\n")
+cat(sprintf("   Non-seasonal: AR(%d), I(%d), MA(%d)\n", p_order, d_order, q_order))
+cat(sprintf("   Seasonal: AR(%d), I(%d), MA(%d), Period=%d\n\n", P_order, D_order, Q_order, seasonal_period))
 
 # Extract residuals
 residuals_matrix <- correlation_results$residuals
@@ -136,8 +146,12 @@ cat(sprintf("- Model Adequacy: %s\n", ifelse(assessment$model_adequate, "✅ ADE
 
 if (assessment$model_adequate) {
   cat(sprintf("\n🎉 %s with correlation weights is adequate for forecasting!\n", model_name))
+  cat("✅ Model orders used: (p,d,q,P,D,Q,s) =", sprintf("(%d,%d,%d,%d,%d,%d,%d)\n", 
+                                                        p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 } else {
-  cat(sprintf("\n⚠ %s with correlation weights may need model refinement.\n", model_name))
+  cat(sprintf("\n⚠️ %s with correlation weights may need model refinement.\n", model_name))
+  cat("⚠️ Model orders used: (p,d,q,P,D,Q,s) =", sprintf("(%d,%d,%d,%d,%d,%d,%d)\n", 
+                                                        p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 }
 
 cat(sprintf("\n✅ Detailed residual analysis completed for %s - correlation Weights\n", model_name))

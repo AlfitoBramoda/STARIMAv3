@@ -17,13 +17,23 @@ library(tseries)
 # Load estimation results
 load("output/11_starima_correlation.RData")
 
-# Extract dynamic model orders
+# Extract dynamic model orders with seasonal parameters
 p_order <- correlation_results$orders$p
 d_order <- correlation_results$orders$d
 q_order <- correlation_results$orders$q
-model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+# Extract seasonal parameters if available
+P_order <- if (!is.null(correlation_results$orders$P)) correlation_results$orders$P else 0
+Q_order <- if (!is.null(correlation_results$orders$Q)) correlation_results$orders$Q else 0
+D_order <- if (!is.null(correlation_results$orders$D)) correlation_results$orders$D else 1
+seasonal_period <- if (!is.null(correlation_results$orders$s)) correlation_results$orders$s else 12
+
+model_name <- sprintf("STARIMA(%d,%d,%d) × (%d,%d,%d)%d", 
+                     p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
 
 cat(sprintf("🔬 Diagnostic Analysis for %s - correlation Weights\n\n", model_name))
+cat("🎯 Current Model Orders:\n")
+cat(sprintf("   Non-seasonal: AR(%d), I(%d), MA(%d)\n", p_order, d_order, q_order))
+cat(sprintf("   Seasonal: AR(%d), I(%d), MA(%d), Period=%d\n\n", P_order, D_order, Q_order, seasonal_period))
 
 # Extract residuals and model info
 residuals_matrix <- correlation_results$residuals
@@ -154,7 +164,7 @@ cat("\n📊 Residual ACF/PACF Analysis:\n")
 cat("==============================\n")
 
 # Load spatial weights for residual spatial analysis
-load("output/07_spatial_weights_correlation_only.RData")
+load("output/07_spatial_weights_correlation.RData")
 C <- spatial_weights$correlation
 
 # Create spatial weights list for residual analysis
@@ -298,7 +308,7 @@ tryCatch({
   cat(sprintf("- STPACF Spatial Lag 1: %s\n", ifelse(significant_stpacf_slag1, "❌ Significant partial autocorr.", "✅ No significant partial autocorr.")))
   
 }, error = function(e) {
-  cat("⚠ Residual STACF/STPACF analysis failed:", e$message, "\n")
+  cat("⚠️ Residual STACF/STPACF analysis failed:", e$message, "\n")
   cat("🔄 Continuing with basic diagnostic tests...\n")
 })
 
@@ -313,7 +323,7 @@ diagnostic_summary <- data.frame(
   Result = c(
     ifelse(overall_white_noise, "✅ PASS", "❌ FAIL"),
     ifelse(mean(normality_results$Shapiro_Normal, na.rm = TRUE) > 0.6, "✅ MOSTLY PASS", "❌ FAIL"),
-    ifelse(overall_white_noise, "✅ ADEQUATE", "⚠ NEEDS IMPROVEMENT")
+    ifelse(overall_white_noise, "✅ ADEQUATE", "⚠️ NEEDS IMPROVEMENT")
   ),
   Interpretation = c(
     "Residuals show no significant autocorrelation",
@@ -344,6 +354,9 @@ diagnostic_results <- list(
 save(diagnostic_results, file = "output/12_diagnostic_correlation.RData")
 
 cat(sprintf("\n=== RESIDUAL DIAGNOSTIC COMPLETED (%s - correlation) ===\n", model_name))
+cat(sprintf("🎯 Final Model: %s\n", model_name))
+cat(sprintf("📊 Orders used: (p,d,q,P,D,Q,s) = (%d,%d,%d,%d,%d,%d,%d)\n", 
+           p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 cat("✅ White noise tests completed\n")
 cat("✅ Normality tests completed\n")
 cat("✅ Diagnostic summary generated\n")
