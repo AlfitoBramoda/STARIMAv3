@@ -6,10 +6,32 @@
 # Date: 2024
 # ============================================================================
 
-# Load required data
-load("output/08_stacf_distance_only.RData")
-load("output/07_spatial_weights_distance.RData")
-load("output/05_differencing_results.RData")
+# Load required data with error handling
+if (file.exists("output/08_stacf_distance_only.RData")) {
+  load("output/08_stacf_distance_only.RData")
+  cat("✅ STACF data loaded\n")
+} else {
+  cat("⚠️ STACF data not found - proceeding without it\n")
+}
+
+if (file.exists("output/07_spatial_weights_distance.RData")) {
+  load("output/07_spatial_weights_distance.RData")
+  cat("✅ Spatial weights loaded\n")
+} else {
+  cat("⚠️ Spatial weights not found - creating default\n")
+  n_regions <- 5
+  spatial_weights <- list(
+    distance = matrix(0.25, nrow = n_regions, ncol = n_regions)
+  )
+  diag(spatial_weights$distance) <- 0
+}
+
+if (file.exists("output/05_differencing_results.RData")) {
+  load("output/05_differencing_results.RData")
+  cat("✅ Differencing results loaded\n")
+} else {
+  cat("⚠️ Differencing results not found - proceeding without it\n")
+}
 
 library(ggplot2)
 
@@ -19,17 +41,17 @@ cat("=== STARMA MODEL STRUCTURE DEFINITION (DISTANCE WEIGHTS - SLAG 1) ===\n\n")
 # 🎯 CUSTOM SEASONAL STARIMA ORDERS - EDIT HERE ONLY!
 # ============================================================================
 n_regions <- 5           # Number of regions
-max_spatial_lag <- 2     # Maximum spatial lag (from spatial weights)
+max_spatial_lag <- 1     # Maximum spatial lag (SLAG 1)
 
 # 🧪 CUSTOM NON-SEASONAL PARAMETERS (EDIT THESE!):
 p_order <- 0             # Non-seasonal AR order (try: 1, 2, 3, 4)
 d_order <- 0             # Non-seasonal differencing (usually 0 or 1)
-q_order <- 0             # Non-seasonal MA order (try: 1, 2, 3)
+q_order <- 1             # Non-seasonal MA order (try: 1, 2, 3)
 
 # 🧪 CUSTOM SEASONAL PARAMETERS (EDIT THESE!):
-P_order <- 1             # Seasonal AR order (try: 0, 1, 2)
+P_order <- 0             # Seasonal AR order (try: 0, 1, 2)
 D_order <- 1             # Seasonal differencing (keep at 1 for monthly data)
-Q_order <- 0             # Seasonal MA order (try: 0, 1, 2)
+Q_order <- 1             # Seasonal MA order (try: 0, 1, 2)
 seasonal_period <- 12    # Seasonal period (keep at 12 for monthly)
 
 n_observations <- 96     # Jumlah observasi training
@@ -45,9 +67,8 @@ n_observations <- 96     # Jumlah observasi training
 # HELPER FUNCTIONS
 # ============================================================================
 create_ar_mask <- function(total_ar_lags, max_spatial_lag) {
-  # 🎯 RESEARCH MODE: Handle ALL orders including 0 for real comparison
   if (is.null(total_ar_lags) || is.na(total_ar_lags)) total_ar_lags <- 0
-  if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
+  if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 1
   
   # For zero AR order - create minimal mask
   if (total_ar_lags == 0) {
@@ -100,9 +121,8 @@ create_ar_mask <- function(total_ar_lags, max_spatial_lag) {
 }
 
 create_ma_mask <- function(total_ma_lags, max_spatial_lag) {
-  # 🎯 RESEARCH MODE: Handle ALL orders including 0 for real comparison
   if (is.null(total_ma_lags) || is.na(total_ma_lags)) total_ma_lags <- 0
-  if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 0
+  if (is.null(max_spatial_lag) || is.na(max_spatial_lag) || max_spatial_lag < 0) max_spatial_lag <- 1
   
   # For zero MA order - create minimal mask
   if (total_ma_lags == 0) {
@@ -201,8 +221,8 @@ cat(sprintf("- Model: STARIMA(%d,%d,%d) × (%d,%d,%d)%d\n",
 cat("- Source: CUSTOM orders (auto-identification disabled)\n")
 cat("- Spatial Lag: 1 (includes neighbor effects)\n")
 
-# 🎯 SLAG 1: Enable spatial lag 1 for neighbor effects
-max_spatial_lag <- 1  # Enable spatial lag 1
+# 🎯 RESEARCH MODE: Respect exact orders for real comparison
+max_spatial_lag <- 1  # SLAG 1 for neighbor effects
 
 # Calculate exact temporal lags needed - FIXED for proper seasonal handling
 total_ar_lags <- p_order  # Use exact non-seasonal order
@@ -302,11 +322,11 @@ cat("- Degrees of freedom:", df, "(", df_assessment, ")\n")
 # ============================================================================
 # SAVE RESULTS
 # ============================================================================
-save(model_structures, plots, file = "output/10_model_structure_distance_weights_slag1.RData")
+save(model_structures, file = "output/10_model_structure_distance_weights.RData")
 
 cat("\n💾 RESULTS SAVED:\n")
 cat("================\n")
-cat("✅ Model structures saved to: output/10_model_structure_distance_weights_slag1.RData\n")
+cat("✅ Model structures saved to: output/10_model_structure_distance_weights.RData\n")
 cat("✅ All orders properly saved:\n")
 cat(sprintf("   • p_order = %d (saved as ar_order)\n", p_order))
 cat(sprintf("   • d_order = %d (saved as d_order)\n", d_order))

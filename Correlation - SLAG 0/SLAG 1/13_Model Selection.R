@@ -20,7 +20,12 @@ library(gridExtra)
 p_order <- correlation_results_slag1$orders$p
 d_order <- correlation_results_slag1$orders$d
 q_order <- correlation_results_slag1$orders$q
-model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+P_order <- correlation_results_slag1$orders$P
+D_order <- correlation_results_slag1$orders$D
+Q_order <- correlation_results_slag1$orders$Q
+seasonal_period <- correlation_results_slag1$orders$s
+model_name <- sprintf("STARIMA(%d,%d,%d) × (%d,%d,%d)%d", 
+                     p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
 
 cat("=== STARIMA MODEL SELECTION (correlation ONLY) ===\n\n")
 cat(sprintf("📋 Evaluating: %s - correlation Weights\n\n", model_name))
@@ -184,7 +189,9 @@ model_selection_results <- list(
 
 save(model_selection_results, file = "output/13_model_selection_correlation.RData")
 
-cat("\n=== MODEL SELECTION COMPLETED (correlation ONLY) ===\n")
-cat(sprintf("✅ %s - correlation model finalized successfully\n", model_name))
+cat("\n=== SEASONAL MODEL SELECTION COMPLETED (correlation ONLY) ===\n")
+cat(sprintf("✅ %s - correlation seasonal model finalized successfully\n", model_name))
+cat(sprintf("📊 Final Orders: (p,d,q,P,D,Q,s) = (%d,%d,%d,%d,%d,%d,%d)\n", 
+           p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 cat("✅ Results saved to: output/13_model_selection_correlation.RData\n")
-cat("🎯 Ready for Phase 5: STARIMA Forecasting\n")
+cat("🎯 Ready for Phase 5: Seasonal STARIMA Forecasting\n")

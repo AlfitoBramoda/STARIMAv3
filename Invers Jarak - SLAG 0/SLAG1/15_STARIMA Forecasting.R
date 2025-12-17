@@ -51,7 +51,13 @@ load("output/03_data_split.RData")         # train_data, test_data
 load("output/05_differencing_results.RData")  # differenced_matrix
 load("output/04_boxcox_data.RData")        # final_data, lambda_overall, transformation_applied
 load("output/07_spatial_weights_distance.RData")    # spatial_weights
-load("output/10_model_structure_distance_weights_slag1.RData")    # model structure
+# Try to load model structure
+if (file.exists("output/10_model_structure_distance_weights.RData")) {
+  load("output/10_model_structure_distance_weights.RData")
+  cat("✅ Model structure loaded\n")
+} else {
+  cat("⚠️ Model structure not found - proceeding without it\n")
+}
 
 cat("Data loaded - Using distance weights\n")
 
