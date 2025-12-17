@@ -103,22 +103,42 @@ cat("\n✅ Diagnostic checks indicate good residual behavior.\n")
 cat("\n🧮 Parameter Consistency (correlation Only):\n")
 cat("========================================\n")
 
-param_consistency <- data.frame(
-  Parameter = correlation_coef$Parameter,
-  Mean_Estimate = correlation_coef$Estimate,
-  Std_Dev = 0,
-  CV_Percent = 0,
-  Significance_Agreement = "✅ Single Model (correlation Only)",
-  stringsAsFactors = FALSE
-)
-
-overall_cv <- 0
-max_cv <- 0
-
-cat("🎯 Consistency metrics:\n")
-cat("- Average CV: 0%\n")
-cat("- Maximum CV: 0%\n")
-cat("- Significance agreement: 100%\n")
+# Handle zero-parameter models
+if (nrow(correlation_coef) > 0) {
+  param_consistency <- data.frame(
+    Parameter = correlation_coef$Parameter,
+    Mean_Estimate = correlation_coef$Estimate,
+    Std_Dev = 0,
+    CV_Percent = 0,
+    Significance_Agreement = "✅ Single Model (correlation Only)",
+    stringsAsFactors = FALSE
+  )
+  
+  overall_cv <- 0
+  max_cv <- 0
+  
+  cat("🎯 Consistency metrics:\n")
+  cat("- Average CV: 0%\n")
+  cat("- Maximum CV: 0%\n")
+  cat("- Significance agreement: 100%\n")
+} else {
+  # Zero-parameter model (white noise)
+  param_consistency <- data.frame(
+    Parameter = character(0),
+    Mean_Estimate = numeric(0),
+    Std_Dev = numeric(0),
+    CV_Percent = numeric(0),
+    Significance_Agreement = character(0),
+    stringsAsFactors = FALSE
+  )
+  
+  overall_cv <- 0
+  max_cv <- 0
+  
+  cat("🎯 White noise model - no parameters to analyze\n")
+  cat("- Model: STARIMA(0,0,0) × (0,1,0)12\n")
+  cat("- Parameters: 0 (pure seasonal differencing)\n")
+}
 
 # ============================================================================
 # MODEL SELECTION DECISION
@@ -143,6 +163,10 @@ selection_summary <- data.frame(
 )
 
 print(selection_summary)
+
+cat("\nℹ️ Note: This is a white noise model with seasonal differencing only\n")
+cat("- No AR or MA parameters estimated\n")
+cat("- Model relies purely on seasonal differencing (D=1)\n")
 
 # ============================================================================
 # VISUALIZATION

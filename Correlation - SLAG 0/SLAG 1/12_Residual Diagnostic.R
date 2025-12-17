@@ -17,13 +17,23 @@ library(tseries)
 # Load estimation results
 load("output/11_starima_correlation_slag1.RData")
 
-# Extract dynamic model orders
+# Extract dynamic model orders with seasonal parameters
 p_order <- correlation_results_slag1$orders$p
 d_order <- correlation_results_slag1$orders$d
 q_order <- correlation_results_slag1$orders$q
-model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+# Extract seasonal parameters if available
+P_order <- if (!is.null(correlation_results_slag1$orders$P)) correlation_results_slag1$orders$P else 0
+Q_order <- if (!is.null(correlation_results_slag1$orders$Q)) correlation_results_slag1$orders$Q else 0
+D_order <- if (!is.null(correlation_results_slag1$orders$D)) correlation_results_slag1$orders$D else 1
+seasonal_period <- if (!is.null(correlation_results_slag1$orders$s)) correlation_results_slag1$orders$s else 12
 
-cat(sprintf("🔬 Diagnostic Analysis for %s - correlation Weights\n\n", model_name))
+model_name <- sprintf("STARIMA(%d,%d,%d) × (%d,%d,%d)%d", 
+                     p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
+
+cat(sprintf("🔬 Diagnostic Analysis for %s - correlation Weights SLAG 1\n\n", model_name))
+cat("🎯 Current Model Orders:\n")
+cat(sprintf("   Non-seasonal: AR(%d), I(%d), MA(%d)\n", p_order, d_order, q_order))
+cat(sprintf("   Seasonal: AR(%d), I(%d), MA(%d), Period=%d\n\n", P_order, D_order, Q_order, seasonal_period))
 
 # Extract residuals and model info
 residuals_matrix <- correlation_results_slag1$residuals
@@ -341,12 +351,15 @@ diagnostic_results <- list(
   spatial_weights = "correlation"
 )
 
-save(diagnostic_results, file = "output/12_diagnostic_correlation.RData")
+save(diagnostic_results, file = "output/12_diagnostic_correlation_slag1.RData")
 
-cat(sprintf("\n=== RESIDUAL DIAGNOSTIC COMPLETED (%s - correlation) ===\n", model_name))
+cat(sprintf("\n=== RESIDUAL DIAGNOSTIC COMPLETED (%s - correlation SLAG 1) ===\n", model_name))
+cat(sprintf("🎯 Final Model: %s\n", model_name))
+cat(sprintf("📊 Orders used: (p,d,q,P,D,Q,s) = (%d,%d,%d,%d,%d,%d,%d)\n", 
+           p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
 cat("✅ White noise tests completed\n")
 cat("✅ Normality tests completed\n")
 cat("✅ Diagnostic summary generated\n")
-cat("✅ Results saved to: output/12_diagnostic_correlation.RData\n")
+cat("✅ Results saved to: output/12_diagnostic_correlation_slag1.RData\n")
 cat("🔗 correlation-based spatial weights diagnostic completed\n")
 cat("🎯 Ready for Phase 5: Model Selection\n")

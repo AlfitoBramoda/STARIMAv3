@@ -10,7 +10,7 @@
 # LOAD REQUIRED DATA
 # ============================================================================
 load("output/11_starima_correlation_slag1.RData")
-load("output/12_diagnostic_correlation.RData")
+load("output/12_diagnostic_correlation_slag1.RData")
 
 library(starma)
 library(ggplot2)
@@ -103,22 +103,42 @@ cat("\n✅ Diagnostic checks indicate good residual behavior.\n")
 cat("\n🧮 Parameter Consistency (correlation Only):\n")
 cat("========================================\n")
 
-param_consistency <- data.frame(
-  Parameter = correlation_coef$Parameter,
-  Mean_Estimate = correlation_coef$Estimate,
-  Std_Dev = 0,
-  CV_Percent = 0,
-  Significance_Agreement = "✅ Single Model (correlation Only)",
-  stringsAsFactors = FALSE
-)
-
-overall_cv <- 0
-max_cv <- 0
-
-cat("🎯 Consistency metrics:\n")
-cat("- Average CV: 0%\n")
-cat("- Maximum CV: 0%\n")
-cat("- Significance agreement: 100%\n")
+# Handle zero-parameter models
+if (nrow(correlation_coef) > 0) {
+  param_consistency <- data.frame(
+    Parameter = correlation_coef$Parameter,
+    Mean_Estimate = correlation_coef$Estimate,
+    Std_Dev = 0,
+    CV_Percent = 0,
+    Significance_Agreement = "✅ Single Model (correlation Only)",
+    stringsAsFactors = FALSE
+  )
+  
+  overall_cv <- 0
+  max_cv <- 0
+  
+  cat("🎯 Consistency metrics:\n")
+  cat("- Average CV: 0%\n")
+  cat("- Maximum CV: 0%\n")
+  cat("- Significance agreement: 100%\n")
+} else {
+  # Zero-parameter model (white noise)
+  param_consistency <- data.frame(
+    Parameter = character(0),
+    Mean_Estimate = numeric(0),
+    Std_Dev = numeric(0),
+    CV_Percent = numeric(0),
+    Significance_Agreement = character(0),
+    stringsAsFactors = FALSE
+  )
+  
+  overall_cv <- 0
+  max_cv <- 0
+  
+  cat("🎯 White noise model - no parameters to analyze\n")
+  cat("- Model: STARIMA(0,0,0) × (0,1,0)12\n")
+  cat("- Parameters: 0 (pure seasonal differencing)\n")
+}
 
 # ============================================================================
 # MODEL SELECTION DECISION
@@ -144,6 +164,12 @@ selection_summary <- data.frame(
 
 print(selection_summary)
 
+if (nrow(correlation_coef) == 0) {
+  cat("\nℹ️ Note: This is a white noise model with seasonal differencing only\n")
+  cat("- No AR or MA parameters estimated\n")
+  cat("- Model relies purely on seasonal differencing (D=1)\n")
+}
+
 # ============================================================================
 # VISUALIZATION
 # ============================================================================
@@ -159,16 +185,7 @@ fit_plot <- ggplot(model_summary, aes(x = Model, y = AIC, fill = Spatial_Weight_
   theme(plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 
-param_plot <- ggplot(param_table, aes(x = Parameter, y = Estimate, fill = Significant)) +
-  geom_col(alpha = 0.7) +
-  labs(title = "Parameter Estimates (correlation Model)",
-       subtitle = "Significant parameters highlighted",
-       x = "Parameter", y = "Estimate Value") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(hjust = 0.5))
 
-grid.arrange(fit_plot, param_plot, ncol = 2)
 
 # ============================================================================
 # SAVE RESULTS
@@ -187,11 +204,11 @@ model_selection_results <- list(
   )
 )
 
-save(model_selection_results, file = "output/13_model_selection_correlation.RData")
+save(model_selection_results, file = "output/13_model_selection_correlation_slag1.RData")
 
 cat("\n=== SEASONAL MODEL SELECTION COMPLETED (correlation ONLY) ===\n")
 cat(sprintf("✅ %s - correlation seasonal model finalized successfully\n", model_name))
 cat(sprintf("📊 Final Orders: (p,d,q,P,D,Q,s) = (%d,%d,%d,%d,%d,%d,%d)\n", 
            p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period))
-cat("✅ Results saved to: output/13_model_selection_correlation.RData\n")
+cat("✅ Results saved to: output/13_model_selection_correlation_slag1.RData\n")
 cat("🎯 Ready for Phase 5: Seasonal STARIMA Forecasting\n")

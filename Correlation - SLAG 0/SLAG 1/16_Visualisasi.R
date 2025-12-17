@@ -22,11 +22,11 @@ for (p in req) {
 # ----------------------------------------------------------------------------
 # Load Forecast Results
 # ----------------------------------------------------------------------------
-if (!file.exists("output/15_forecast_correlation.RData")) {
-  stop("❌ correlation forecast results not found. Run output/15_forecast_correlation.RData")
+if (!file.exists("output/15_forecast_correlation_slag1.RData")) {
+  stop("❌ correlation forecast results not found. Run output/15_forecast_correlation_slag1.RData")
 }
 
-load("output/15_forecast_correlation.RData")  # expected: results_correlation
+load("output/15_forecast_correlation_slag1.RData")  # expected: results_correlation
 load("output/03_data_split.RData")         # expected: test_data, test_time
 
 cat("✅ correlation forecast results loaded successfully\n\n")
@@ -175,8 +175,8 @@ evaluation_correlation <- list(
   test_data = test_data
 )
 
-save(evaluation_correlation, file = "output/16_correlation_evaluation.RData")
+save(evaluation_correlation, file = "output/16_correlation_evaluation_slag1.RData")
 
-cat("\n💾 Evaluation results saved → output/16_correlation_evaluation.RData\n")
+cat("\n💾 Evaluation results saved → output/16_correlation_evaluation_slag1.RData\n")
 cat("📊 Plots saved in folder → plots/\n")
 cat("✅ STARIMA (correlation) evaluation completed successfully!\n")

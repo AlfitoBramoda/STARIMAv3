@@ -15,16 +15,26 @@ library(tidyr)
 library(dplyr)
 
 # Load diagnostic results
-load("output/12_diagnostic_correlation.RData")
+load("output/12_diagnostic_correlation_slag1.RData")
 load("output/11_starima_correlation_slag1.RData")
 
-# Extract model info
+# Extract dynamic model info with seasonal parameters
 p_order <- correlation_results_slag1$orders$p
 d_order <- correlation_results_slag1$orders$d
 q_order <- correlation_results_slag1$orders$q
-model_name <- sprintf("STARIMA(%d,%d,%d)", p_order, d_order, q_order)
+# Extract seasonal parameters if available
+P_order <- if (!is.null(correlation_results_slag1$orders$P)) correlation_results_slag1$orders$P else 0
+Q_order <- if (!is.null(correlation_results_slag1$orders$Q)) correlation_results_slag1$orders$Q else 0
+D_order <- if (!is.null(correlation_results_slag1$orders$D)) correlation_results_slag1$orders$D else 1
+seasonal_period <- if (!is.null(correlation_results_slag1$orders$s)) correlation_results_slag1$orders$s else 12
 
-cat(sprintf("📊 Detailed Residual Analysis for %s - correlation Weights\n\n", model_name))
+model_name <- sprintf("STARIMA(%d,%d,%d) × (%d,%d,%d)%d", 
+                     p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
+
+cat(sprintf("📊 Detailed Residual Analysis for %s - correlation Weights SLAG 1\n\n", model_name))
+cat("🎯 Current Model Orders:\n")
+cat(sprintf("   Non-seasonal: AR(%d), I(%d), MA(%d)\n", p_order, d_order, q_order))
+cat(sprintf("   Seasonal: AR(%d), I(%d), MA(%d), Period=%d\n\n", P_order, D_order, Q_order, seasonal_period))
 
 # Extract residuals
 residuals_matrix <- correlation_results_slag1$residuals
