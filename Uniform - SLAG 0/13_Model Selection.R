@@ -21,9 +21,10 @@ library(gridExtra)
 p_order <- uniform_results$orders$p
 d_order <- uniform_results$orders$d
 q_order <- uniform_results$orders$q
-P_order <- uniform_results_slag1$orders$P
-D_order <- uniform_results_slag1$orders$D
-Q_order <- uniform_results_slag1$orders$Q
+P_order <- uniform_results$orders$P
+D_order <- uniform_results$orders$D
+Q_order <- uniform_results$orders$Q
+seasonal_period <- 12
 model_name <- sprintf("STARIMA(%d,%d,%d) × (%d,%d,%d)%d", 
                      p_order, d_order, q_order, P_order, D_order, Q_order, seasonal_period)
 
